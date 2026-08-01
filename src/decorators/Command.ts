@@ -1,3 +1,7 @@
+import { setCommandOptions } from '#src/internal/metadata';
+
+type CommandDecoratorTarget = new (...positionals: string[]) => object;
+
 export interface CommandExample {
   syntax?: string;
   description?: string;
@@ -8,7 +12,7 @@ export interface CommandOptions {
   args?: string;
   description?: string;
   category?: string;
-  aliases?: string | readonly string[];
+  aliases?: readonly string[];
   examples?: readonly CommandExample[];
   epilog?: readonly string[];
 }
@@ -17,7 +21,10 @@ export function Command(options: CommandOptions | string) {
   const normalizedOptions: CommandOptions =
     typeof options === 'string' ? { name: options } : options;
 
-  return (_target: unknown, context: ClassDecoratorContext) => {
-    context.metadata.command = normalizedOptions;
+  return (
+    _target: CommandDecoratorTarget,
+    context: ClassDecoratorContext<CommandDecoratorTarget>,
+  ) => {
+    setCommandOptions(context, normalizedOptions);
   };
 }
