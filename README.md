@@ -1,6 +1,6 @@
-# murasame
+# Rebake
 
-Murasame is a decorator-based CLI framework developed on top of Bun. You can easily create your own command-line tools using the latest ECMAScript decorator syntax.
+Rebake is a decorator-based CLI framework developed on top of Bun. You can easily create your own command-line tools using the latest ECMAScript decorator syntax.
 
 Read in other languages: English | [简体中文](./README.zh.md)
 
@@ -38,7 +38,7 @@ cli.parse();
 In the early days, JavaScript did not have the concept of decorators. Decorators in TypeScript were implemented through the [reflect-metadata](https://www.npmjs.com/package/reflect-metadata) dependency library, which is not an official ECMAScript specification. Now, we can directly run native decorators through Bun:
 
 ```typescript
-import { Program, Command, Option, execute } from 'murasame';
+import { Command, execute, Option, Program } from 'rebake';
 
 @Command({
   name: 'echo',
@@ -97,15 +97,15 @@ In addition, you can visit the [Bun official documentation](https://bun.com/docs
 After completing the preparation work, we can simply add the dependencies using `bun add`:
 
 ```shell
-bun add murasame
+bun add rebake
 ```
 
 ## Quick Start
 
-Here is a complete single-file example showing how to quickly build a command-line tool with arguments and options using Murasame:
+Here is a complete single-file example showing how to quickly build a command-line tool with arguments and options using Rebake:
 
 ```typescript
-import { Program, Command, Option, execute } from 'murasame';
+import { Command, execute, Option, Program } from 'rebake';
 
 @Command({
   name: 'echo',
@@ -145,7 +145,7 @@ If you've **manually configured** the `lib` option in the `compilerOptions` node
 }
 ```
 
-After saving the `cli.ts` code, you can run it directly with Bun. Murasame will automatically collect the defined decorator metadata upon application startup, and finally output the CLI panel:
+After saving the `cli.ts` code, you can run it directly with Bun. Rebake will automatically collect the defined decorator metadata upon application startup, and finally output the CLI panel:
 
 ```shell
 $ bun cli.ts
@@ -174,8 +174,8 @@ Usage: my-tools echo [flags] <text>
   Output a text to the terminal.
 
 Flags:
-  -h, --help             Print help text for command.
-  -r, --reverse          Reverse of the string.
+  -h, --help       Display this menu and exit
+  -r, --reverse    Reverse of the string.
 ```
 
 By providing the corresponding command, you can run the program immediately, and the positional arguments will be automatically injected into the constructor by their declared order:
@@ -200,7 +200,7 @@ ollaic
 
 ## API & Concepts
 
-Murasame deeply replicates the default behavior of Bun's native CLI, aiming to bring a consistent and harmonious experience to developers using Bun.
+Rebake deeply replicates the default behavior of Bun's native CLI, aiming to bring a consistent and harmonious experience to developers using Bun.
 
 ### Program Entry: `@Program(options?: ProgramOptions)`
 
@@ -278,7 +278,7 @@ Blog                             https://blog.yuki.sh
 GitHub                           https://github.com/xueelf
 ```
 
-Different categories will be separated by newlines and sorted alphabetically.
+Different categories are separated by blank lines. Categories configured in `categories` follow the object's declaration order; unconfigured categories retain command declaration order.
 
 By default, the command names within the _Commands:_ label will output in black bold text. We can customize the text style through `categories`:
 
@@ -295,7 +295,7 @@ class Tools {}
 
 ### Defining Commands: `@Command(options: CommandOptions | string)`
 
-`@Command` is used to declare an individual executable command. When this command is invoked, Murasame will parse the arguments input in the terminal and inject them sequentially into the instance object of that class:
+`@Command` is used to declare an individual executable command. When this command is invoked, Rebake will parse the arguments input in the terminal and inject them sequentially into the instance object of that class:
 
 ```typescript
 @Command({
@@ -328,7 +328,7 @@ class EchoCommand {
 ```
 
 - **`name`**: Command name.
-- **`args`**: Arguments information.
+- **`args`**: Positional-argument synopsis displayed in help.
 - **`aliases`**: Invocation aliases.
 - **`category`**: Command category, corresponding to the `categories` key in `@Program`.
 - **`description`**: The description text of the command, which will automatically align and display on the right side of the command.
@@ -337,7 +337,7 @@ class EchoCommand {
 
 #### args
 
-`args` is used to define and display the positional arguments required by the current command (such as `<text>`, `[options]`, etc.) in the terminal help prompt. When the command is executed, the underlying engine will inject the consecutive positional arguments it reads into the `constructor` of the command class sequentially, following the original passed-in order:
+`args` controls the positional-argument text displayed in help, such as `<text>` or `[options]`. It does not infer or validate an argument grammar. When the command is executed, Bun passes the parsed positional arguments to the command class constructor in their original order:
 
 ```typescript
 @Command({
@@ -367,7 +367,7 @@ This way, whether you type `my-tools install`, `my-tools i`, or `my-tools add`, 
 
 ### Defining Options: `@Option(options?: OptionOptions)`
 
-The option decorator must be applied on the **static properties (`static`)** of the class. The decorator evaluates automatically how this option should be managed based on your initial JavaScript type (`string` or `boolean`):
+The option decorator must be applied to a public, string-named **static property (`static`)** initialized with a `string` or `boolean`. Short names must be one alphanumeric character; `help` and `-h` are reserved:
 
 ```typescript
 @Command('echo')
@@ -394,6 +394,8 @@ false
 true
 true
 ```
+
+Boolean options initialized to `true` can be disabled with the corresponding `--no-<name>` option, consistent with Bun's command-line behavior.
 
 ```typescript
 @Command('echo')
@@ -431,16 +433,15 @@ In CLI industry standards (like POSIX Utility Syntax Guidelines and GNU Command 
 - Short options
   - `-o out` (space): POSIX standard, the most widely accepted short option format.
   - `-oout` (compact): POSIX standard, trailing compactly, e.g., mysql -uroot -ppassword.
-  - `-o=out` (equals sign, non-standard)
 
-The equals sign `=` is traditionally designed specifically for long options (`--outfile=out`) in specifications. Adjoining short options with equals signs technically breaks formal POSIX standardization; however, modern CLI parsing APIs (including parseArgs) strive to present high tolerance towards users, and commonly parse `-o=out` precisely all the same.
+The equals sign `=` is generally reserved for long options (`--outfile=out`) by specification; using it with short options is **non-standard** under strict POSIX rules. Do not use `-o=out`: `parseArgs` treats the leading `=` as part of the value.
 
 ### Execution: `execute(ProgramClass)`
 
 When all the commands and configurations have been defined, merely hand over the primary container class annotated with the `@Program` decorator to the `execute` processor:
 
 ```typescript
-import { execute } from 'murasame';
+import { execute } from 'rebake';
 
 @Program({
   name: 'my-tools',
@@ -453,19 +454,21 @@ class Tools {}
 execute(Tools);
 ```
 
+`execute` follows command-line application semantics: invalid user input is written to the standard error stream and immediately terminates the process with status `1`. Invalid decorator or command configuration throws a `TypeError`.
+
 ## Beautiful Aesthetics & Built-in Interactions
 
-It's not constrained to solely CLI decorators alone. Murasame incorporates a lightweight C-FFI layer underneath, allowing us to easily invoke built-in high-performance terminal interactive APIs. Apart from that, text beautification tools are provided.
+It's not constrained to solely CLI decorators alone. Rebake implements terminal interactions with Bun and TypeScript, without shipping C sources or platform-specific binaries. Apart from that, text beautification tools are provided.
 
-### Text Coloring: `colorize(color, text)`
+### Text Coloring: `colorize(style, text)`
 
 If you'd like to add striking colors or decorations (like bold or underline) to the texts output in the terminal, you can use the built-in `colorize` function, which processes text directly into ANSI escape code sequences:
 
 ```typescript
-import { colorize } from 'murasame';
+import { colorize } from 'rebake';
 
 // Single color
-console.log(colorize('cyan', 'Hello, Murasame!'));
+console.log(colorize('cyan', 'Hello, Rebake!'));
 
 // Array combo of colors/formats: [foregroundColor, style]
 console.log(colorize(['#57b497', 'bold'], 'Ciallo～(∠·ω< )⌒★'));
@@ -476,7 +479,7 @@ console.log(colorize(['#57b497', 'bold'], 'Ciallo～(∠·ω< )⌒★'));
 Blocks the executing main thread, waiting for the user to input a piece of normal text content within the terminal window:
 
 ```typescript
-import { input } from 'murasame/prompts';
+import { input } from 'rebake/prompts';
 
 const answer = input('What is your name?', { default: 'Yuki' });
 console.log(`Hello, ${answer}!`);
@@ -487,7 +490,7 @@ console.log(`Hello, ${answer}!`);
 Renders a selectable single-choice list on the terminal where users can seamlessly interact using the keyboard (up/down selection and enter to confirm):
 
 ```typescript
-import { select } from 'murasame/prompts';
+import { select } from 'rebake/prompts';
 
 const framework = select('Choose your favorite framework:', [
   { label: 'Vue', value: 'vue' },
@@ -498,18 +501,8 @@ const framework = select('Choose your favorite framework:', [
 console.log(`Your choice: ${framework?.value}`);
 ```
 
-Besides interacting visually with keyboard arrow keys, you can also operate using `j` and `k`. Simultaneously, triggering a double press of `ESC` or directly hitting `Ctrl + c` will cancel the operation.
+Each choice uses a string `value`; `label` controls the displayed text, `selected` sets the initial choice, and `disabled` prevents a choice from being selected.
 
-If you are careful enough, you might have already noticed that whether it's `input` or `select`, their terminal layout styling and logical interactive behaviors are entirely identical to the native Bun CLI.
+Besides interacting visually with keyboard arrow keys, you can also operate using `j` and `k`. Simultaneously, triggering a double press of `ESC` or directly hitting `Ctrl + c` will cancel the operation and exit the process with status `0`.
 
-## FAQ
-
-### Origin of the Name
-
-The word _murasame_ is the romaji of the Japanese word "ムラサメ" (usually written in kanji as "村雨", and translated to "Autumn Rain" in English), referring to a kind of rain that is violent at first, then gentle, occurring in fits and starts. In traditional Japanese poetry, it is frequently associated with the cold rain of autumn.
-
-Meanwhile, she is also the name of a character standing from the game SENREN＊BANKA, translated as "丛雨" in Chinese. She handles problems to aid her master and stays by his side managing various issues. I love rain, and I also like Murasame, so I chose it as the name for this project.
-
-## Thanks
-
-The package name "murasame" was originally occupied but remained unmaintained for a relatively long time. After communicating with the author, [Kamata](https://github.com/kamataryo) transferred its publish permissions over to me. Hereby, I express my gratitude once again!
+If you are careful enough, you might have already noticed that whether it's `input` or `select`, their terminal layout styling and logical interactive behaviors are entirely identical to the Bun 1.3.14 CLI.
