@@ -16,12 +16,18 @@ interface PromptProcessResult {
 function getTerminalEnv(color: boolean): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = {
     ...process.env,
-    FORCE_COLOR: color ? '1' : '0',
     TERM: 'xterm-256color',
   };
 
   delete env['NODE_DISABLE_COLORS'];
-  delete env['NO_COLOR'];
+
+  if (color) {
+    env['FORCE_COLOR'] = '1';
+    delete env['NO_COLOR'];
+  } else {
+    env['NO_COLOR'] = '1';
+    delete env['FORCE_COLOR'];
+  }
 
   return env;
 }

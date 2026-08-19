@@ -5,6 +5,19 @@ import { join } from 'node:path';
 import { Command, execute, Option, Program } from '#src/index';
 import { visibleTextWidth } from '#src/utils/terminal';
 
+const COLOR_ENV_KEYS = [
+  'CI',
+  'COLORTERM',
+  'FORCE_COLOR',
+  'GITHUB_ACTIONS',
+  'NODE_DISABLE_COLORS',
+  'NO_COLOR',
+  'TERM',
+  'TERM_PROGRAM',
+  'TERM_PROGRAM_VERSION',
+  'TMUX',
+] as const;
+
 afterEach(() => {
   mock.restore();
 });
@@ -21,6 +34,51 @@ function captureConsole(): { errors: string[]; logs: string[] } {
   });
 
   return { errors, logs };
+}
+
+function overrideColorEnabled(enabled: boolean): () => void {
+  const environment = new Map(
+    COLOR_ENV_KEYS.map(key => [key, process.env[key]]),
+  );
+
+  for (const key of COLOR_ENV_KEYS) {
+    delete process.env[key];
+  }
+
+  if (enabled) {
+    process.env['FORCE_COLOR'] = '1';
+  } else {
+    process.env['NO_COLOR'] = '1';
+  }
+
+  return () => {
+    for (const [key, value] of environment) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  };
+}
+
+async function runRuntimeError(
+  env: Record<string, string | undefined>,
+): Promise<{ exitCode: number; stderr: string; stdout: string }> {
+  const subprocess = Bun.spawn({
+    cmd: [process.execPath, join(import.meta.dir, 'fixtures/runtime-error.ts')],
+    cwd: join(import.meta.dir, '..'),
+    env,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+  const [exitCode, stdout, stderr] = await Promise.all([
+    subprocess.exited,
+    new Response(subprocess.stdout).text(),
+    new Response(subprocess.stderr).text(),
+  ]);
+
+  return { exitCode, stderr, stdout };
 }
 
 describe('execute', () => {
@@ -224,32 +282,33 @@ describe('execute', () => {
   });
 
   test('writes parser errors to stderr and exits the process', async () => {
-    const env: Record<string, string | undefined> = {
+    const plainEnvironment: Record<string, string | undefined> = {
       ...process.env,
       NO_COLOR: '1',
     };
 
-    delete env['FORCE_COLOR'];
+    delete plainEnvironment['FORCE_COLOR'];
 
-    const subprocess = Bun.spawn({
-      cmd: [
-        process.execPath,
-        join(import.meta.dir, 'fixtures/runtime-error.ts'),
-      ],
-      cwd: join(import.meta.dir, '..'),
-      env,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-    const [exitCode, stdout, stderr] = await Promise.all([
-      subprocess.exited,
-      new Response(subprocess.stdout).text(),
-      new Response(subprocess.stderr).text(),
-    ]);
+    const plainResult = await runRuntimeError(plainEnvironment);
 
-    expect(exitCode).toBe(1);
-    expect(stdout).toBe('');
-    expect(stderr).toBe("error: Unknown option '--unknown'\n");
+    expect(plainResult.exitCode).toBe(1);
+    expect(plainResult.stdout).toBe('');
+    expect(plainResult.stderr).toBe("error: Unknown option '--unknown'\n");
+
+    const coloredEnvironment: Record<string, string | undefined> = {
+      ...process.env,
+    };
+
+    for (const key of COLOR_ENV_KEYS) {
+      delete coloredEnvironment[key];
+    }
+    coloredEnvironment['TERM'] = 'xterm-256color';
+
+    const coloredResult = await runRuntimeError(coloredEnvironment);
+
+    expect(coloredResult.exitCode).toBe(1);
+    expect(coloredResult.stdout).toBe('');
+    expect(coloredResult.stderr).toStartWith('\x1b[0m\x1b[31merror');
   });
 
   test('rejects invalid program and command definitions', () => {
@@ -385,15 +444,9 @@ describe('execute', () => {
 
   test('uses Bun help ANSI sequences for usage and flags', () => {
     const { logs } = captureConsole();
-    const forceColor = process.env['FORCE_COLOR'];
-    const noColor = process.env['NO_COLOR'];
-    const nodeDisableColors = process.env['NODE_DISABLE_COLORS'];
+    const restoreColor = overrideColorEnabled(true);
 
     try {
-      process.env['FORCE_COLOR'] = '1';
-      delete process.env['NO_COLOR'];
-      delete process.env['NODE_DISABLE_COLORS'];
-
       @Command({
         name: 'build',
         args: '<target>',
@@ -444,23 +497,7 @@ describe('execute', () => {
       );
       expect(topLevelHelp).toContain('  \x1b[1m\x1b[32mbuild\x1b[0m');
     } finally {
-      if (forceColor === undefined) {
-        delete process.env['FORCE_COLOR'];
-      } else {
-        process.env['FORCE_COLOR'] = forceColor;
-      }
-
-      if (noColor === undefined) {
-        delete process.env['NO_COLOR'];
-      } else {
-        process.env['NO_COLOR'] = noColor;
-      }
-
-      if (nodeDisableColors === undefined) {
-        delete process.env['NODE_DISABLE_COLORS'];
-      } else {
-        process.env['NODE_DISABLE_COLORS'] = nodeDisableColors;
-      }
+      restoreColor();
     }
   });
 
