@@ -77,18 +77,28 @@ function applyParsedOptions(
   command: CommandDefinition,
   values: ReturnType<typeof parseArgs>['values'],
 ): void {
+  // 先完成互斥校验，避免用户输入错误重置上一次成功执行留下的状态。
+  for (const [name, option] of command.optionRegistry) {
+    const hasConflictingValues =
+      values[name] === true &&
+      option.type === 'boolean' &&
+      option.defaultValue === true &&
+      values[`no-${name}`] === true;
+
+    if (hasConflictingValues) {
+      exitWithError(
+        `Options "--${name}" and "--no-${name}" cannot be used together.`,
+      );
+    }
+  }
+  resetCommandOptions(command);
+
   for (const [name, option] of command.optionRegistry) {
     const value = values[name];
     const isNegated =
       option.type === 'boolean' &&
       option.defaultValue === true &&
       values[`no-${name}`] === true;
-
-    if (value === true && isNegated) {
-      exitWithError(
-        `Options "--${name}" and "--no-${name}" cannot be used together.`,
-      );
-    }
     const appliedValue = isNegated ? false : value;
 
     if (
@@ -143,8 +153,6 @@ export function execute(
       `Command "${commandToken ?? ''}" not found. Run "${program.executableName} --help" to see available commands.`,
     );
   }
-  resetCommandOptions(command);
-
   const parsedArgs = parseArgsOrExit({
     args: argv.slice(commandIndex + 1),
     options: buildParseOptions(command),

@@ -158,6 +158,48 @@ describe('execute', () => {
     ]);
   });
 
+  test('preserves static options when the command does not execute', () => {
+    captureConsole();
+
+    @Command('run')
+    class RunCommand {
+      @Option()
+      static cache = true;
+
+      @Option()
+      static verbose = false;
+    }
+
+    @Program({ commands: [RunCommand] })
+    class Application {}
+
+    execute(Application, ['run', '--no-cache', '--verbose']);
+
+    expect(RunCommand.cache).toBeFalse();
+    expect(RunCommand.verbose).toBeTrue();
+
+    execute(Application, ['run', '--help']);
+
+    expect(RunCommand.cache).toBeFalse();
+    expect(RunCommand.verbose).toBeTrue();
+
+    const exit = spyOn(process, 'exit').mockImplementation(code => {
+      throw new Error(`EXIT:${code}`);
+    });
+
+    expect(() => execute(Application, ['run', '--unknown'])).toThrow('EXIT:1');
+    expect(RunCommand.cache).toBeFalse();
+    expect(RunCommand.verbose).toBeTrue();
+
+    expect(() =>
+      execute(Application, ['run', '--cache', '--no-cache']),
+    ).toThrow('EXIT:1');
+    expect(RunCommand.cache).toBeFalse();
+    expect(RunCommand.verbose).toBeTrue();
+    expect(exit).toHaveBeenCalledTimes(2);
+    expect(exit).toHaveBeenLastCalledWith(1);
+  });
+
   test('renders global and command help and prints the version', () => {
     const { logs } = captureConsole();
 
