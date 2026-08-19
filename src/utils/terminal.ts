@@ -53,10 +53,7 @@ function applyHexColor(color: HexColor, text: string): string {
   return `\x1b[38;2;${red};${green};${blue}m${text}${RESET}`;
 }
 
-export function colorize(
-  style: TextStyle | readonly TextStyle[],
-  text: string,
-): string {
+function parseTextStyles(style: TextStyle | readonly TextStyle[]) {
   const styles = Array.isArray(style) ? style : [style];
   const hexColors = styles.filter(isHexColor);
   const inspectColors = styles.filter(
@@ -71,6 +68,21 @@ export function colorize(
   if (hexColor) {
     validateHexColor(hexColor);
   }
+
+  return { hexColor, inspectColors };
+}
+
+export function validateTextStyle(
+  style: TextStyle | readonly TextStyle[],
+): void {
+  parseTextStyles(style);
+}
+
+export function colorize(
+  style: TextStyle | readonly TextStyle[],
+  text: string,
+): string {
+  const { hexColor, inspectColors } = parseTextStyles(style);
 
   if (!isColorEnabled()) {
     return text;

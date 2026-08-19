@@ -9,6 +9,7 @@ import {
   getOptionRegistry,
   getProgramOptions,
 } from '#src/internal/metadata';
+import { validateTextStyle } from '#src/utils/terminal';
 
 type CommandConstructor = NonNullable<ProgramOptions['commands']>[number];
 
@@ -82,6 +83,15 @@ function validateOptions(
   }
 }
 
+function validateCategoryStyles(
+  categories: ProgramOptions['categories'],
+): void {
+  // 分类配置属于程序定义，不能等到彩色帮助渲染时才暴露非法值。
+  for (const style of Object.values(categories ?? {})) {
+    validateTextStyle(style);
+  }
+}
+
 export function createProgramDefinition(
   ProgramClass: ProgramConstructor,
 ): ProgramDefinition {
@@ -97,6 +107,7 @@ export function createProgramDefinition(
     (ProgramClass.name.length > 0 ? ProgramClass.name : 'cli');
 
   assertName('Program', executableName);
+  validateCategoryStyles(programOptions.categories);
 
   const commands: CommandDefinition[] = [];
   const commandLookup = new Map<string, CommandDefinition>();

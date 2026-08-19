@@ -593,6 +593,35 @@ describe('execute', () => {
     }
   });
 
+  test('validates category colors before execution without color', () => {
+    const restoreColor = overrideColorEnabled(false);
+    let executionCount = 0;
+
+    try {
+      @Command({ name: 'build', category: 'project' })
+      class BuildCommand {
+        constructor() {
+          executionCount += 1;
+        }
+      }
+
+      @Program({
+        commands: [BuildCommand],
+        categories: {
+          project: '#fff',
+        },
+      })
+      class Application {}
+
+      expect(() => execute(Application, ['build'])).toThrow(
+        'Invalid hexadecimal color "#fff". Expected #RRGGBB.',
+      );
+      expect(executionCount).toBe(0);
+    } finally {
+      restoreColor();
+    }
+  });
+
   test('rejects option names that Bun parseArgs cannot expose', () => {
     @Command('negative')
     class NegativeCommand {
