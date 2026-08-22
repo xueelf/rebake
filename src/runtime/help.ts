@@ -375,10 +375,6 @@ export function renderCommandHelp(
     lines.push('', styleHelpText('bold', 'Examples:'));
 
     for (const [index, example] of command.commandOptions.examples.entries()) {
-      if (!example) {
-        continue;
-      }
-
       if (index > 0) {
         lines.push('');
       }
