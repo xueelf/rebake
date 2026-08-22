@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 
+import { input } from '#src/prompts/input';
 import { select } from '#src/prompts/select';
 import { ANSI } from '#src/utils/terminal';
 
@@ -168,6 +169,22 @@ async function runInputInTerminal(
 }
 
 describe('input prompt', () => {
+  test('rejects invalid arguments before reading from the terminal', () => {
+    const invalidMessage = JSON.parse('1');
+    const invalidOptions = JSON.parse('null');
+    const invalidDefault = JSON.parse('{"default":1}');
+
+    expect(() => input(invalidMessage)).toThrow(
+      'Input message must be a string.',
+    );
+    expect(() => input('', invalidOptions)).toThrow(
+      'Input options must be an object.',
+    );
+    expect(() => input('', invalidDefault)).toThrow(
+      'Input default value must be a string.',
+    );
+  });
+
   test('uses defaults only for submitted empty input', async () => {
     const empty = await runPromptFromPipe([10], 'input.ts');
     const endOfInput = await runPromptFromPipe([], 'input.ts');
@@ -253,6 +270,29 @@ describe('input prompt', () => {
 });
 
 describe('select prompt', () => {
+  test('rejects invalid arguments before reading from the terminal', () => {
+    const invalidMessage = JSON.parse('1');
+    const invalidChoices = JSON.parse('{}');
+    const invalidChoiceValues = [
+      JSON.parse('null'),
+      JSON.parse('{"value":1}'),
+      JSON.parse('{"value":"one","label":1}'),
+      JSON.parse('{"value":"one","disabled":"false"}'),
+      JSON.parse('{"value":"one","selected":"false"}'),
+    ];
+
+    expect(() => select(invalidMessage, [])).toThrow(
+      'Select message must be a string.',
+    );
+    expect(() => select('', invalidChoices)).toThrow(
+      'Select choices must be an array.',
+    );
+
+    for (const choice of invalidChoiceValues) {
+      expect(() => select('', [choice])).toThrow(TypeError);
+    }
+  });
+
   test('returns null without reading from the terminal when no choice is available', () => {
     expect(select('Choose', [])).toBeNull();
     expect(select('Choose', [{ value: 'vue', disabled: true }])).toBeNull();

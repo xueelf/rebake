@@ -39,7 +39,22 @@ export function input(
   message: string,
   options: InputOptions = {},
 ): string | null {
+  if (typeof message !== 'string') {
+    throw new TypeError('Input message must be a string.');
+  }
+
+  if (
+    typeof options !== 'object' ||
+    options === null ||
+    Array.isArray(options)
+  ) {
+    throw new TypeError('Input options must be an object.');
+  }
   const defaultValue = options.default;
+
+  if (defaultValue !== undefined && typeof defaultValue !== 'string') {
+    throw new TypeError('Input default value must be a string.');
+  }
 
   if (message.length > 0) {
     const hasVisibleDefault =

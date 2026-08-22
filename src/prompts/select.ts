@@ -17,6 +17,49 @@ export interface SelectChoice {
 
 type InteractionState = 'active' | 'cancelled' | 'confirmed';
 
+function validateSelectArguments(
+  message: string,
+  choices: readonly SelectChoice[],
+): void {
+  if (typeof message !== 'string') {
+    throw new TypeError('Select message must be a string.');
+  }
+
+  if (!Array.isArray(choices)) {
+    throw new TypeError('Select choices must be an array.');
+  }
+
+  for (const [index, choice] of choices.entries()) {
+    if (typeof choice !== 'object' || choice === null) {
+      throw new TypeError(`Select choice at index ${index} must be an object.`);
+    }
+
+    if (typeof choice.value !== 'string') {
+      throw new TypeError(
+        `Select choice value at index ${index} must be a string.`,
+      );
+    }
+
+    if (choice.label !== undefined && typeof choice.label !== 'string') {
+      throw new TypeError(
+        `Select choice label at index ${index} must be a string.`,
+      );
+    }
+
+    if (choice.disabled !== undefined && typeof choice.disabled !== 'boolean') {
+      throw new TypeError(
+        `Select choice disabled state at index ${index} must be a boolean.`,
+      );
+    }
+
+    if (choice.selected !== undefined && typeof choice.selected !== 'boolean') {
+      throw new TypeError(
+        `Select choice selected state at index ${index} must be a boolean.`,
+      );
+    }
+  }
+}
+
 function getChoiceLabel(choice: SelectChoice): string {
   return choice.label ?? choice.value;
 }
@@ -102,6 +145,8 @@ export function select(
   message: string,
   choices: readonly SelectChoice[],
 ): SelectChoice | null {
+  validateSelectArguments(message, choices);
+
   if (choices.length === 0) {
     return null;
   }
