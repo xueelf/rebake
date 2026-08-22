@@ -474,6 +474,8 @@ console.log(colorize('cyan', 'Hello, Rebake!'));
 console.log(colorize(['#57b497', 'bold'], 'Ciallo～(∠·ω< )⌒★'));
 ```
 
+Color output follows Bun's environment-variable rules. `FORCE_COLOR` takes precedence over `NO_COLOR`: every value except a zero-valued integer, `false`, `no`, or `off` forces color, including an empty string. When color is not forced, `NO_COLOR` disables color unless it is unset, empty, `0`, `false`, `no`, or `off`; otherwise, color depends on whether the target stream is a TTY.
+
 ### Text Input: `input(message, options?)`
 
 Blocks the executing main thread, waiting for the user to input a piece of normal text content within the terminal window:

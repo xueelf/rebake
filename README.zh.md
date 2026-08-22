@@ -462,6 +462,8 @@ console.log(colorize('cyan', 'Hello, Rebake!'));
 console.log(colorize(['#57b497', 'bold'], 'Ciallo～(∠·ω< )⌒★'));
 ```
 
+颜色输出遵循 Bun 的环境变量规则。`FORCE_COLOR` 优先于 `NO_COLOR`：除零值整数以及 `false`、`no`、`off` 外，其它值（包括空字符串）都会强制着色。未强制着色时，`NO_COLOR` 除未设置、空字符串、`0`、`false`、`no`、`off` 外，其它值都会禁用颜色；否则由目标输出流是否为 TTY 决定。
+
 ### 文本输入：`input(message, options?)`
 
 阻塞当前主进程，等待用户在终端窗口输入一段普通的文本：

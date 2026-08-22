@@ -1,5 +1,4 @@
 import { stringWidth } from 'bun';
-import { WriteStream } from 'node:tty';
 import { type InspectColor, styleText } from 'node:util';
 
 type HexColor = `#${string}`;
@@ -9,6 +8,8 @@ export type TextStyle = InspectColor | HexColor;
 type CliStyle = 'cyan' | 'dim' | 'green' | 'red' | 'underline';
 
 const RESET = '\x1b[0m';
+const FALSE_ENV_VALUES = new Set(['', '0', 'false', 'no', 'off']);
+const FALSE_FORCE_COLOR_VALUES = new Set(['false', 'no', 'off']);
 
 // 前景色和背景色需要使用完整 RESET 收尾，修饰符则可保留独立关闭行为。
 const MODIFIER_STYLES = new Set<InspectColor>([
@@ -53,6 +54,22 @@ function applyHexColor(color: HexColor, text: string): string {
   return `\x1b[38;2;${red};${green};${blue}m${text}${RESET}`;
 }
 
+function isNoColorEnabled(value: string | undefined): boolean {
+  return value !== undefined && !FALSE_ENV_VALUES.has(value.toLowerCase());
+}
+
+function isForceColorEnabled(value: string | undefined): boolean {
+  if (value === undefined) {
+    return false;
+  }
+
+  // Bun 将空字符串视为开启，并将合法的零值整数与常见假值视为未强制着色。
+  return !(
+    /^-?0(?:_?0)*$/.test(value) ||
+    FALSE_FORCE_COLOR_VALUES.has(value.toLowerCase())
+  );
+}
+
 function parseTextStyles(style: TextStyle | readonly TextStyle[]) {
   const styles = Array.isArray(style) ? style : [style];
   const hexColors = styles.filter(isHexColor);
@@ -88,7 +105,9 @@ export function colorize(
     return text;
   }
   const styledText =
-    inspectColors.length > 0 ? styleText(inspectColors, text) : text;
+    inspectColors.length > 0
+      ? styleText(inspectColors, text, { validateStream: false })
+      : text;
   const normalizedText = inspectColors.some(
     currentStyle => !MODIFIER_STYLES.has(currentStyle),
   )
@@ -100,12 +119,14 @@ export function colorize(
 export function isColorEnabled(
   stream: { readonly isTTY?: boolean } = process.stdout,
 ): boolean {
-  const hasColors = WriteStream.prototype.hasColors(16, process.env);
+  if (isForceColorEnabled(process.env['FORCE_COLOR'])) {
+    return true;
+  }
 
-  return (
-    hasColors &&
-    (process.env['FORCE_COLOR'] !== undefined || stream.isTTY === true)
-  );
+  if (isNoColorEnabled(process.env['NO_COLOR'])) {
+    return false;
+  }
+  return stream.isTTY === true;
 }
 
 export function styleCliText(
