@@ -86,6 +86,11 @@ function parseTextStyles(style: TextStyle | readonly TextStyle[]) {
     validateHexColor(hexColor);
   }
 
+  // 命名样式必须在禁色环境下也由 Bun 原生实现完成校验。
+  if (inspectColors.length > 0) {
+    styleText(inspectColors, '', { validateStream: false });
+  }
+
   return { hexColor, inspectColors };
 }
 

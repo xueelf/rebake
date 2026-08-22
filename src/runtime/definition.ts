@@ -27,7 +27,11 @@ export interface ProgramDefinition {
   commandLookup: ReadonlyMap<string, CommandDefinition>;
 }
 
-function assertName(kind: string, name: string): void {
+function assertName(kind: string, name: unknown): void {
+  if (typeof name !== 'string') {
+    throw new TypeError(`${kind} name must be a string.`);
+  }
+
   if (name.length === 0) {
     throw new TypeError(`${kind} name cannot be empty.`);
   }

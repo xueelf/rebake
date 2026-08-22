@@ -410,6 +410,26 @@ describe('execute', () => {
       'must be decorated with @Command()',
     );
 
+    @Command(JSON.parse('{}'))
+    class MissingCommandName {}
+
+    @Program({ commands: [MissingCommandName] })
+    class MissingCommandNameApplication {}
+
+    expect(() => execute(MissingCommandNameApplication, [])).toThrow(
+      'Command name must be a string.',
+    );
+
+    @Command(JSON.parse('{"name":1}'))
+    class InvalidCommandName {}
+
+    @Program({ commands: [InvalidCommandName] })
+    class InvalidCommandNameApplication {}
+
+    expect(() => execute(InvalidCommandNameApplication, [])).toThrow(
+      'Command name must be a string.',
+    );
+
     @Command({ name: 'first', aliases: ['shared'] })
     class FirstCommand {}
 
@@ -666,6 +686,15 @@ describe('execute', () => {
 
       expect(() => execute(Application, ['build'])).toThrow(
         'Invalid hexadecimal color "#fff". Expected #RRGGBB.',
+      );
+
+      const categories = JSON.parse('{"project":"banana"}');
+
+      @Program({ commands: [BuildCommand], categories })
+      class InvalidNamedStyleApplication {}
+
+      expect(() => execute(InvalidNamedStyleApplication, ['build'])).toThrow(
+        "Received 'banana'",
       );
       expect(executionCount).toBe(0);
     } finally {
