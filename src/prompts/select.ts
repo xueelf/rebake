@@ -89,6 +89,15 @@ function trySetRawMode(
   }
 }
 
+function readSelectByteOrEof(): number {
+  try {
+    return readStdinByteOrEof();
+  } catch {
+    // Bun 的 select 会按当前读取阶段将系统读取错误视为确认或取消。
+    return -1;
+  }
+}
+
 export function select(
   message: string,
   choices: readonly SelectChoice[],
@@ -138,7 +147,7 @@ export function select(
       drawChoices(choices, selectedIndex, false);
 
       while (interactionState === 'active') {
-        const inputByte = readStdinByteOrEof();
+        const inputByte = readSelectByteOrEof();
         let selectionDelta = 0;
 
         switch (inputByte) {
@@ -155,13 +164,13 @@ export function select(
             break;
 
           case 27: {
-            const nextByte = readStdinByteOrEof();
+            const nextByte = readSelectByteOrEof();
 
             if (nextByte !== 91) {
               interactionState = 'cancelled';
               break;
             }
-            const arrowByte = readStdinByteOrEof();
+            const arrowByte = readSelectByteOrEof();
 
             if (arrowByte === -1) {
               interactionState = 'cancelled';

@@ -487,6 +487,8 @@ const answer = input('What is your name?', { default: 'Yuki' });
 console.log(`Hello, ${answer}!`);
 ```
 
+Input accepts up to 1023 bytes of text. Longer input throws a `RangeError` instead of being truncated.
+
 ### Single Choice List: `select(message, choices)`
 
 Renders a selectable single-choice list on the terminal where users can seamlessly interact using the keyboard (up/down selection and enter to confirm):

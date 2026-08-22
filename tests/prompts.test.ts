@@ -190,6 +190,32 @@ describe('input prompt', () => {
     expect(result.result).toBe('  Rebake  ');
   });
 
+  test('rejects input beyond the Bun prompt byte boundary', async () => {
+    const accepted = await runPromptFromPipe(
+      new TextEncoder().encode(`${'a'.repeat(1023)}\n`),
+      'input.ts',
+    );
+    const rejected = await runPromptFromPipe(
+      new TextEncoder().encode(`${'a'.repeat(1024)}\n`),
+      'input.ts',
+    );
+
+    expect(accepted.exitCode).toBe(0);
+    expect(accepted.result).toHaveLength(1023);
+    expect(rejected.exitCode).toBe(1);
+    expect(rejected.result).toContain('Input cannot exceed 1023 bytes.');
+  });
+
+  test('propagates input read errors without changing select behavior', async () => {
+    const inputError = await runPromptFromPipe([], 'input-read-error.ts');
+    const selection = await runPromptFromPipe([], 'select-read-error.ts');
+
+    expect(inputError.exitCode).toBe(1);
+    expect(inputError.result).toContain('syscall: "read"');
+    expect(selection.exitCode).toBe(0);
+    expect(selection.result).toBe('first');
+  });
+
   test('preserves input boundaries between consecutive prompts', async () => {
     const afterInput = await runPromptFromPipe(
       new TextEncoder().encode('alice\n2'),

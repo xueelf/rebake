@@ -475,6 +475,8 @@ const answer = input('What is your name', { default: 'Yuki' });
 console.log(`Hello, ${answer}!`);
 ```
 
+输入正文最多接受 1023 字节。超过限制时会抛出 `RangeError`，不会静默截断。
+
 ### 单选列表：`select(message, choices)`
 
 基于终端渲染出一个可使用键盘交互（上下选择与回车确认）的单选列表：

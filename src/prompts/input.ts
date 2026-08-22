@@ -3,6 +3,7 @@ import { enterInputMode } from '#src/internal/terminal-mode';
 import { SPACE, styleCliText, writeStdout } from '#src/utils/terminal';
 
 const textDecoder = new TextDecoder();
+const INPUT_BUFFER_SIZE = 1024;
 
 export interface InputOptions {
   default?: string;
@@ -12,6 +13,10 @@ function readInputLine(): string | null {
   const inputBytes: number[] = [];
 
   while (true) {
+    // Bun 在读取下一字节前检查缓冲区，因此正文最多为 1023 字节，LF 占用最后一次读取。
+    if (inputBytes.length >= INPUT_BUFFER_SIZE) {
+      throw new RangeError('Input cannot exceed 1023 bytes.');
+    }
     const inputByte = readStdinByteOrEof();
 
     if (inputByte === -1) {
