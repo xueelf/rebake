@@ -82,47 +82,6 @@ function renderTopLevelUsage(executableName: string): string {
   );
 }
 
-/**
- * 示例既允许完整命令，也允许省略程序名或只填写参数部分。
- */
-function normalizeExampleSyntax(
-  executableName: string,
-  commandName: string,
-  syntax: string,
-): string {
-  const commandPrefix = `${executableName} ${commandName}`;
-
-  if (syntax === commandPrefix || syntax.startsWith(`${commandPrefix} `)) {
-    return syntax;
-  }
-
-  if (syntax === commandName || syntax.startsWith(`${commandName} `)) {
-    return `${executableName} ${syntax}`;
-  }
-  return `${executableName} ${commandName}${syntax ? ` ${syntax}` : ''}`;
-}
-
-function getInlineSynopsis(
-  executableName: string,
-  command: CommandDefinition,
-  syntax?: string,
-): string {
-  if (!syntax) {
-    return command.commandOptions.args ?? '';
-  }
-  const normalizedSyntax = normalizeExampleSyntax(
-    executableName,
-    command.commandOptions.name,
-    syntax,
-  );
-  const prefix = `${executableName} ${command.commandOptions.name}`;
-
-  if (normalizedSyntax === prefix) {
-    return '';
-  }
-  return normalizedSyntax.slice(prefix.length + 1);
-}
-
 function toStyleList(
   style: TextStyle | readonly TextStyle[] | undefined,
 ): TextStyle[] {
@@ -153,46 +112,18 @@ function renderCommandName(
 function createCommandRows(program: ProgramDefinition): CommandHelpRow[] {
   const rows: CommandHelpRow[] = [];
 
-  // 示例会展开为独立行，但命令名和别名只显示在第一行。
   for (const command of program.commands) {
-    const fallbackExample: CommandExample = {};
+    const alias = command.aliases[0];
+    const aliasHint = alias
+      ? ` ${styleHelpText('dim', `(${program.executableName} ${alias})`)}`
+      : '';
 
-    if (command.commandOptions.args !== undefined) {
-      fallbackExample.syntax = command.commandOptions.args;
-    }
-
-    if (command.commandOptions.description !== undefined) {
-      fallbackExample.description = command.commandOptions.description;
-    }
-    const examples: readonly CommandExample[] =
-      command.commandOptions.examples &&
-      command.commandOptions.examples.length > 0
-        ? command.commandOptions.examples
-        : [fallbackExample];
-
-    for (const [index, example] of examples.entries()) {
-      if (!example) {
-        continue;
-      }
-      const alias = index === 0 ? command.aliases[0] : undefined;
-      const aliasHint = alias
-        ? ` ${styleHelpText('dim', `(${program.executableName} ${alias})`)}`
-        : '';
-
-      rows.push({
-        category: command.commandOptions.category,
-        name: index === 0 ? command.commandOptions.name : '',
-        synopsis: getInlineSynopsis(
-          program.executableName,
-          command,
-          example.syntax,
-        ),
-        description:
-          (example.description ??
-            (index === 0 ? (command.commandOptions.description ?? '') : '')) +
-          aliasHint,
-      });
-    }
+    rows.push({
+      category: command.commandOptions.category,
+      name: command.commandOptions.name,
+      synopsis: command.commandOptions.args ?? '',
+      description: (command.commandOptions.description ?? '') + aliasHint,
+    });
   }
 
   return rows;
@@ -396,22 +327,13 @@ function createFlagRows(command: CommandDefinition): FlagHelpRow[] {
   return rows;
 }
 
-function renderExample(
-  executableName: string,
-  commandName: string,
-  example: CommandExample,
-): string[] {
+function renderExample(example: CommandExample): string[] {
   const lines: string[] = [];
 
   if (example.description) {
     lines.push(`  ${styleHelpText('dim', example.description)}`);
   }
-  lines.push(
-    `  ${styleHelpText(
-      ['bold', 'green'],
-      normalizeExampleSyntax(executableName, commandName, example.syntax ?? ''),
-    )}`,
-  );
+  lines.push(`  ${styleHelpText(['bold', 'green'], example.syntax)}`);
 
   return lines;
 }
@@ -460,13 +382,7 @@ export function renderCommandHelp(
       if (index > 0) {
         lines.push('');
       }
-      lines.push(
-        ...renderExample(
-          program.executableName,
-          command.commandOptions.name,
-          example,
-        ),
-      );
+      lines.push(...renderExample(example));
     }
   }
 

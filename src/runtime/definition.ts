@@ -92,6 +92,16 @@ function validateCategoryStyles(
   }
 }
 
+function validateExamples(commandOptions: CommandOptions): void {
+  for (const example of commandOptions.examples ?? []) {
+    if (example.syntax.trim().length === 0) {
+      throw new TypeError(
+        `Example syntax for command "${commandOptions.name}" cannot be empty.`,
+      );
+    }
+  }
+}
+
 export function createProgramDefinition(
   ProgramClass: ProgramConstructor,
 ): ProgramDefinition {
@@ -121,6 +131,7 @@ export function createProgramDefinition(
       );
     }
     assertName('Command', commandOptions.name);
+    validateExamples(commandOptions);
 
     const aliases = commandOptions.aliases ?? [];
     const optionRegistry = getOptionRegistry(commandClass) ?? new Map();

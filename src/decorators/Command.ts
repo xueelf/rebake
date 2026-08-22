@@ -3,7 +3,7 @@ import { setCommandOptions } from '#src/internal/metadata';
 type CommandDecoratorTarget = new (...positionals: string[]) => object;
 
 export interface CommandExample {
-  syntax?: string;
+  syntax: string;
   description?: string;
 }
 

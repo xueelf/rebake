@@ -1,4 +1,11 @@
-import { Command, Program } from '#src/index';
+import { type CommandExample, Command, Program } from '#src/index';
+
+export const validExample: CommandExample = {
+  syntax: 'tool valid value',
+};
+
+// @ts-expect-error 示例必须显式提供完整命令，不能从 args 或命令名推断。
+export const invalidExample: CommandExample = {};
 
 @Command('valid')
 export class ValidCommand {

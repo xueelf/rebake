@@ -211,7 +211,7 @@ describe('execute', () => {
       category: 'project',
       examples: [
         {
-          syntax: 'build app',
+          syntax: 'tool build app',
           description: 'Build the application.',
         },
         {
@@ -249,8 +249,7 @@ describe('execute', () => {
         'Usage: tool <command> [...flags] [...args]\n' +
         '\n' +
         'Commands:\n' +
-        '  build     app                  Build the application. (tool b)\n' +
-        '            library              Build the library.\n' +
+        '  build     <target>             Build a target. (tool b)\n' +
         '\n' +
         '  <command> --help               Print help text for command.\n' +
         '\n' +
@@ -285,6 +284,48 @@ describe('execute', () => {
         '  tool build library\n' +
         '\n' +
         'Build artifacts are written to the output directory.',
+    );
+  });
+
+  test('renders examples verbatim without using them as command synopses', () => {
+    const { logs } = captureConsole();
+
+    @Command({
+      name: 'build',
+      aliases: ['b'],
+      args: '<target>',
+      description: 'Build a target.',
+      examples: [
+        {
+          syntax: 'tool b app',
+          description: 'Use the alias.',
+        },
+        {
+          syntax: 'custom invocation',
+        },
+      ],
+    })
+    class BuildCommand {}
+
+    @Program({ name: 'tool', commands: [BuildCommand] })
+    class Application {}
+
+    execute(Application, []);
+
+    const topLevelHelp = stripANSI(logs.at(-1) ?? '');
+
+    expect(topLevelHelp).toContain(
+      '  build     <target>             Build a target. (tool b)',
+    );
+    expect(topLevelHelp).not.toContain('tool b app');
+    expect(topLevelHelp).not.toContain('custom invocation');
+
+    execute(Application, ['b', '--help']);
+
+    const commandHelp = stripANSI(logs.at(-1) ?? '');
+
+    expect(commandHelp).toContain(
+      '  Use the alias.\n  tool b app\n\n  custom invocation',
     );
   });
 
@@ -380,6 +421,16 @@ describe('execute', () => {
 
     expect(() => execute(DuplicateAliasApplication, [])).toThrow(
       'Command name or alias "shared" is shared',
+    );
+
+    @Command({ name: 'empty-example', examples: [{ syntax: '  ' }] })
+    class EmptyExampleCommand {}
+
+    @Program({ commands: [EmptyExampleCommand] })
+    class EmptyExampleApplication {}
+
+    expect(() => execute(EmptyExampleApplication, [])).toThrow(
+      'Example syntax for command "empty-example" cannot be empty.',
     );
   });
 
@@ -493,7 +544,7 @@ describe('execute', () => {
         name: 'build',
         args: '<target>',
         category: 'project',
-        examples: [{ syntax: 'build app' }],
+        examples: [{ syntax: 'tool build app' }],
       })
       class BuildCommand {
         @Option({ short: 'o', description: 'Output directory.' })

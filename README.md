@@ -328,16 +328,16 @@ class EchoCommand {
 ```
 
 - **`name`**: Command name.
-- **`args`**: Positional-argument synopsis displayed in help.
+- **`args`**: Positional-argument synopsis displayed in Usage and the top-level command list.
 - **`aliases`**: Invocation aliases.
 - **`category`**: Command category, corresponding to the `categories` key in `@Program`.
 - **`description`**: The description text of the command, which will automatically align and display on the right side of the command.
-- **`examples`**: Add usage examples for the current command. Accepts an array of objects containing `syntax` and `description`.
+- **`examples`**: Add usage examples for the current command. Each object requires `syntax` containing a complete invocation and may include a `description`; the syntax is rendered verbatim.
 - **`epilog`**: Append additional supplementary explanations or prompt texts at the very bottom of the current command's help panel. Accepts an array of strings, one per line.
 
 #### args
 
-`args` controls the positional-argument text displayed in help, such as `<text>` or `[options]`. It does not infer or validate an argument grammar. When the command is executed, Bun passes the parsed positional arguments to the command class constructor in their original order:
+`args` controls the positional-argument text displayed in Usage and the top-level command list, such as `<text>` or `[options]`. It does not infer or validate an argument grammar. When the command is executed, Bun passes the parsed positional arguments to the command class constructor in their original order:
 
 ```typescript
 @Command({
