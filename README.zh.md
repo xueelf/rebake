@@ -76,7 +76,7 @@ execute(Tools);
 
 ### 什么是 Bun？
 
-Bun 是一个 JavaScript runtime，与 Node.js、Deno 一样，但它可以原生运行 TypeScript 代码，并在 v1.3.10 添加了对新版装饰器的支持。
+Bun 是一个 JavaScript runtime，与 Node.js、Deno 一样，但它可以原生运行 TypeScript 代码，并支持新版装饰器。
 
 你可以在终端执行对应的脚本进行安装：
 
@@ -497,4 +497,4 @@ console.log(`Your choice: ${framework?.value}`);
 
 除了使用键盘方向键控制上下选择，你还可以使用 `j`、`k` 操作。同时，你可以连按两下 `ESC` 或者直接使用 `Ctrl + c` 来取消，进程会按照 Bun 的行为以状态码 `0` 退出。
 
-细心的你可能已经发现了，不论是 `input` 还是 `select`，在终端的排版样式以及逻辑交互上，也都是与 Bun 1.3.14 的 CLI 完全一致的。
+细心的你可能已经发现了，不论是 `input` 还是 `select`，在终端的排版样式以及逻辑交互上，也都是与 Bun 的 CLI 完全一致的。

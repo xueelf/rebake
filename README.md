@@ -76,7 +76,7 @@ Isn't this cool? The code is much more readable and conducive to modular managem
 
 ### What is Bun?
 
-Bun is a JavaScript runtime, similar to Node.js and Deno, but it can natively execute TypeScript code, and extended support for the new decorators was added in v1.3.10.
+Bun is a JavaScript runtime, similar to Node.js and Deno, but it can natively execute TypeScript code and supports the new decorators.
 
 You can install it by executing the corresponding scripts in your terminal:
 
@@ -509,4 +509,4 @@ Each choice uses a string `value`; `label` controls the displayed text, `selecte
 
 Besides interacting visually with keyboard arrow keys, you can also operate using `j` and `k`. Simultaneously, triggering a double press of `ESC` or directly hitting `Ctrl + c` will cancel the operation and exit the process with status `0`.
 
-If you are careful enough, you might have already noticed that whether it's `input` or `select`, their terminal layout styling and logical interactive behaviors are entirely identical to the Bun 1.3.14 CLI.
+If you are careful enough, you might have already noticed that whether it's `input` or `select`, their terminal layout styling and logical interactive behaviors are entirely identical to the native Bun CLI.

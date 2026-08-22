@@ -238,7 +238,7 @@ describe('input prompt', () => {
 
   if (process.platform !== 'win32') {
     // 快照保留 ANSI 和 CRLF，确保控制序列也与 Bun CLI 完全一致。
-    test('matches Bun v1.3.14 input output with and without color', async () => {
+    test('matches Bun input output with and without color', async () => {
       const plain = await runInputInTerminal(false);
       const colored = await runInputInTerminal(true);
 
@@ -305,7 +305,7 @@ describe('select prompt', () => {
       expect(result.result).toBe('react');
     });
 
-    test('matches Bun v1.3.14 cancellation output without color', async () => {
+    test('matches Bun cancellation output without color', async () => {
       const result = await runSelectInTerminal([3], false);
 
       expect(result.exitCode).toBe(0);
@@ -323,7 +323,7 @@ describe('select prompt', () => {
       expect(result.result).toBe('');
     });
 
-    test('matches Bun v1.3.14 cancellation output with color', async () => {
+    test('matches Bun cancellation output with color', async () => {
       const result = await runSelectInTerminal([3], true);
 
       expect(result.exitCode).toBe(0);
@@ -359,7 +359,7 @@ describe('select prompt', () => {
       expect(endOfTransmission.result).toBe('');
     });
 
-    test('matches Bun v1.3.14 unsupported and incomplete key handling', async () => {
+    test('matches Bun unsupported and incomplete key handling', async () => {
       const uppercase = await runPromptFromPipe([74, 13]);
       const applicationCursor = await runPromptFromPipe([27, 79, 66]);
       const incompleteArrow = await runPromptFromPipe([27, 91]);
@@ -372,7 +372,7 @@ describe('select prompt', () => {
       );
     });
 
-    test('matches Bun v1.3.14 numeric selection behavior', async () => {
+    test('matches Bun numeric selection behavior', async () => {
       const result = await runSelectInTerminal([50]);
 
       expect(result.output).toContain(
@@ -381,14 +381,14 @@ describe('select prompt', () => {
       expect(result.result).toBe('react');
     });
 
-    test('redraws unchanged selection like Bun v1.3.14', async () => {
+    test('redraws unchanged selection like Bun', async () => {
       const result = await runSelectInTerminal([122, 13]);
 
       expect(result.output.match(/ {7}Blank/g)).toHaveLength(2);
       expect(result.result).toBe('blank');
     });
 
-    test('confirms the default choice on EOF like Bun v1.3.14', async () => {
+    test('confirms the default choice on EOF like Bun', async () => {
       const result = await runPromptFromPipe();
 
       expect(result.exitCode).toBe(0);
