@@ -1,5 +1,3 @@
-import { type CommandDefinition, type ProgramDefinition } from './definition';
-
 import { type CommandExample } from '#src/decorators/Command';
 import {
   type TextStyle,
@@ -8,6 +6,8 @@ import {
   isColorEnabled,
   visibleTextWidth,
 } from '#src/utils/terminal';
+
+import { type CommandDefinition, type ProgramDefinition } from './definition';
 
 interface CommandHelpRow {
   category: string | undefined;

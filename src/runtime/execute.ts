@@ -1,10 +1,10 @@
 import { parseArgs } from 'node:util';
 
-import { type CommandDefinition, createProgramDefinition } from './definition';
-import { renderCommandHelp, renderTopLevelHelp } from './help';
-
 import { type ProgramConstructor } from '#src/decorators/Program';
 import { styleCliText } from '#src/utils/terminal';
+
+import { type CommandDefinition, createProgramDefinition } from './definition';
+import { renderCommandHelp, renderTopLevelHelp } from './help';
 
 type ParseOptionSpec = {
   type: 'boolean' | 'string';
