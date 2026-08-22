@@ -1,29 +1,24 @@
-import { cc } from 'bun:ffi';
-import source from '../native/terminal.c' with { type: 'file' };
-import { ANSI, SYMBOL, colorize, writeText } from '../utils/terminal';
+import { readStdinByteOrEof } from '#src/internal/stdin';
+import { enterSelectMode } from '#src/internal/terminal-mode';
+import {
+  ANSI,
+  isColorEnabled,
+  styleCliText,
+  SYMBOL,
+  writeStdout,
+} from '#src/utils/terminal';
 
 export interface SelectChoice {
   value: string;
   label?: string;
-  text?: string;
   disabled?: boolean;
   selected?: boolean;
 }
 
-const terminalBindings = cc({
-  source,
-  symbols: {
-    enable_raw_mode: { returns: 'void' },
-    disable_raw_mode: { returns: 'void' },
-    read_byte: { returns: 'i32' },
-  },
-});
-
-const { enable_raw_mode, disable_raw_mode, read_byte } =
-  terminalBindings.symbols;
+type InteractionState = 'active' | 'cancelled' | 'confirmed';
 
 function getChoiceLabel(choice: SelectChoice): string {
-  return choice.label ?? choice.text ?? choice.value;
+  return choice.label ?? choice.value;
 }
 
 function getInitialSelectionIndex(choices: readonly SelectChoice[]): number {
@@ -34,7 +29,6 @@ function getInitialSelectionIndex(choices: readonly SelectChoice[]): number {
   if (selectedChoiceIndex !== -1) {
     return selectedChoiceIndex;
   }
-
   return choices.findIndex(choice => !choice.disabled);
 }
 
@@ -56,157 +50,202 @@ function renderChoiceLine(choice: SelectChoice, isSelected: boolean): string {
   const label = getChoiceLabel(choice);
 
   if (choice.disabled) {
-    return `\r${SYMBOL.INDENT}${colorize('dim', `${label} (disabled)`)}${ANSI.CLEAR_TO_END}\n`;
+    return `${SYMBOL.INDENT}${styleCliText('dim', `${label} (disabled)`)}${ANSI.CLEAR_TO_END}\n`;
   }
 
   if (isSelected) {
-    return `\r${SYMBOL.POINTER}${colorize('underline', label)}${ANSI.CLEAR_TO_END}\n`;
+    return `${SYMBOL.POINTER}${styleCliText('underline', label)}${ANSI.CLEAR_TO_END}\n`;
   }
-
-  return `\r${SYMBOL.INDENT}${label}${ANSI.CLEAR_TO_END}\n`;
+  return `${SYMBOL.INDENT}${label}${ANSI.CLEAR_TO_END}\n`;
 }
 
-function renderChoices(
+function drawChoices(
   choices: readonly SelectChoice[],
   selectedIndex: number,
   moveCursorUp = true,
 ): void {
   if (moveCursorUp) {
-    writeText(`\r${ANSI.CURSOR_UP(choices.length)}`);
+    writeStdout(ANSI.CURSOR_UP(choices.length));
   }
 
-  for (let index = 0; index < choices.length; index += 1) {
-    const choice = choices[index];
-
-    if (!choice) {
-      continue;
-    }
-
-    writeText(renderChoiceLine(choice, index === selectedIndex));
+  for (const [index, choice] of choices.entries()) {
+    writeStdout(renderChoiceLine(choice, index === selectedIndex));
   }
+  writeStdout(ANSI.ERASE_DOWN);
 }
 
 function clearInteractiveBlock(choiceCount: number): void {
-  writeText(
-    ANSI.CURSOR_SHOW,
-    ANSI.CURSOR_UP(choiceCount + 1),
-    '\r',
-    ANSI.CLEAR_LINE,
-    ANSI.ERASE_DOWN,
-  );
+  writeStdout(ANSI.CURSOR_UP(choiceCount + 1), ANSI.ERASE_DOWN);
+}
+
+function trySetRawMode(
+  setRawMode: (enabled: boolean) => unknown,
+  enabled: boolean,
+): void {
+  try {
+    setRawMode(enabled);
+  } catch {
+    // Bun 原生 prompt 忽略 raw mode 切换失败，交互流程仍继续执行。
+  }
+}
+
+function readSelectByteOrEof(): number {
+  try {
+    return readStdinByteOrEof();
+  } catch {
+    // Bun 的 select 会按当前读取阶段将系统读取错误视为确认或取消。
+    return -1;
+  }
 }
 
 export function select(
   message: string,
-  choices: SelectChoice[],
+  choices: readonly SelectChoice[],
 ): SelectChoice | null {
   if (choices.length === 0) {
     return null;
   }
-
   let selectedIndex = getInitialSelectionIndex(choices);
 
   if (selectedIndex === -1) {
     return null;
   }
-
-  let isCancelled = false;
-  let isConfirmed = false;
-
-  writeText(
-    SYMBOL.QUESTION,
-    message,
-    colorize('dim', ' - Press return to submit.'),
-    '\n',
-  );
+  const setRawMode =
+    process.platform !== 'win32' &&
+    typeof process.stdin.setRawMode === 'function'
+      ? process.stdin.setRawMode.bind(process.stdin)
+      : undefined;
+  const shouldSetRawMode =
+    process.stdin.isTTY === true && setRawMode !== undefined;
+  const colorEnabled = isColorEnabled();
+  let interactionState: InteractionState = 'active';
+  // Bun 使用数字快捷键时返回目标项，但完成行仍显示快捷键触发前的高亮项。
+  let completionChoiceIndex = selectedIndex;
+  let restoreTerminalMode: (() => void) | undefined;
 
   try {
-    enable_raw_mode();
-    writeText(ANSI.CURSOR_HIDE);
-    renderChoices(choices, selectedIndex, false);
+    if (process.platform === 'win32') {
+      restoreTerminalMode = enterSelectMode();
+    } else if (shouldSetRawMode) {
+      trySetRawMode(setRawMode, true);
+      restoreTerminalMode = () => {
+        trySetRawMode(setRawMode, false);
+      };
+    }
+    writeStdout(
+      SYMBOL.QUESTION,
+      message,
+      styleCliText('dim', ' - Press return to submit.'),
+      '\n',
+    );
 
-    while (!isCancelled && !isConfirmed) {
-      const keyCode = read_byte();
-      let selectionDelta = 0;
+    try {
+      if (colorEnabled) {
+        writeStdout(ANSI.CURSOR_HIDE);
+      }
+      // 首次渲染不回移光标，之后每次按键都覆盖整个选项区域。
+      drawChoices(choices, selectedIndex, false);
 
-      switch (keyCode) {
-        case -1:
-        case 3:
-        case 4:
-          isCancelled = true;
-          break;
+      while (interactionState === 'active') {
+        const inputByte = readSelectByteOrEof();
+        let selectionDelta = 0;
 
-        case 10:
-        case 13:
-          isConfirmed = true;
-          break;
+        switch (inputByte) {
+          // Bun 将 EOF 当作确认当前高亮项。
+          case -1:
+          case 10:
+          case 13:
+            interactionState = 'confirmed';
+            break;
 
-        case 27: {
-          const nextByte = read_byte();
+          case 3:
+          case 4:
+            interactionState = 'cancelled';
+            break;
 
-          if (nextByte !== 91) {
-            isCancelled = true;
+          case 27: {
+            const nextByte = readSelectByteOrEof();
+
+            if (nextByte !== 91) {
+              interactionState = 'cancelled';
+              break;
+            }
+            const arrowByte = readSelectByteOrEof();
+
+            if (arrowByte === -1) {
+              interactionState = 'cancelled';
+            } else if (arrowByte === 65) {
+              selectionDelta = -1;
+            } else if (arrowByte === 66) {
+              selectionDelta = 1;
+            }
             break;
           }
 
-          const arrowKey = read_byte();
-          if (arrowKey === 65) {
-            selectionDelta = -1;
-          } else if (arrowKey === 66) {
+          case 106:
             selectionDelta = 1;
-          }
-          break;
+            break;
+
+          case 107:
+            selectionDelta = -1;
+            break;
+
+          default:
+            if (inputByte >= 49 && inputByte <= 57) {
+              const directSelectionIndex = inputByte - 49;
+              const directSelection = choices[directSelectionIndex];
+
+              if (directSelection && !directSelection.disabled) {
+                completionChoiceIndex = selectedIndex;
+                selectedIndex = directSelectionIndex;
+                interactionState = 'confirmed';
+              }
+            }
+            break;
         }
 
-        case 74:
-        case 106:
-          selectionDelta = 1;
-          break;
-
-        case 75:
-        case 107:
-          selectionDelta = -1;
-          break;
-
-        default:
-          if (keyCode >= 49 && keyCode <= 57) {
-            const directSelectionIndex = keyCode - 49;
-            const directSelection = choices[directSelectionIndex];
-
-            if (directSelection && !directSelection.disabled) {
-              selectedIndex = directSelectionIndex;
-              isConfirmed = true;
-            }
+        if (interactionState === 'active') {
+          if (selectionDelta !== 0) {
+            selectedIndex = moveSelection(
+              selectedIndex,
+              selectionDelta,
+              choices,
+            );
+            completionChoiceIndex = selectedIndex;
           }
-          break;
+          drawChoices(choices, selectedIndex);
+        }
       }
+      clearInteractiveBlock(choices.length);
 
-      if (!isCancelled && !isConfirmed && selectionDelta !== 0) {
-        selectedIndex = moveSelection(selectedIndex, selectionDelta, choices);
-        renderChoices(choices, selectedIndex);
+      const completionChoice = choices[completionChoiceIndex];
+
+      if (completionChoice) {
+        writeStdout(
+          SYMBOL.SUCCESS,
+          message,
+          styleCliText('dim', ':'),
+          ' ',
+          getChoiceLabel(completionChoice),
+          colorEnabled ? ANSI.RESET : '',
+          '\n',
+        );
+      }
+    } finally {
+      // 读取或渲染失败时也必须恢复被隐藏的光标。
+      if (colorEnabled) {
+        writeStdout(ANSI.CURSOR_SHOW);
       }
     }
   } finally {
-    disable_raw_mode();
+    restoreTerminalMode?.();
   }
 
-  clearInteractiveBlock(choices.length);
-
+  if (interactionState === 'cancelled') {
+    writeStdout('\n', SYMBOL.ERROR, 'Cancelled\n');
+    process.exit(0);
+  }
   const selectedChoice = choices[selectedIndex];
 
-  if (selectedChoice) {
-    writeText(
-      SYMBOL.SUCCESS,
-      message,
-      colorize('dim', ': '),
-      colorize('cyan', getChoiceLabel(selectedChoice)),
-      '\n',
-    );
-  }
-
-  if (isCancelled) {
-    writeText('\n', SYMBOL.ERROR, 'Cancelled\n');
-    return null;
-  }
-  return selectedChoice || null;
+  return selectedChoice ?? null;
 }

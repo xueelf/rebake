@@ -1,19 +1,26 @@
-import { type ThemeColor } from '../utils/terminal';
+import { setProgramOptions } from '#src/internal/metadata';
+import { type TextStyle } from '#src/utils/terminal';
 
-export type CommandClass = abstract new (...args: never[]) => object;
+type CommandConstructor = new (...positionals: string[]) => object;
+
+export type ProgramConstructor = abstract new (
+  ...constructorArguments: never[]
+) => object;
 
 export interface ProgramOptions {
   name?: string;
   description?: string;
   version?: string;
-  prefix?: string;
-  commands?: readonly CommandClass[];
-  categories?: Readonly<Record<string, ThemeColor | readonly ThemeColor[]>>;
+  commands?: readonly CommandConstructor[];
+  categories?: Readonly<Record<string, TextStyle | readonly TextStyle[]>>;
   details?: Readonly<Record<string, string>>;
 }
 
 export function Program(options: ProgramOptions = {}) {
-  return (_target: unknown, context: ClassDecoratorContext) => {
-    context.metadata.program = options;
+  return (
+    _target: ProgramConstructor,
+    context: ClassDecoratorContext<ProgramConstructor>,
+  ) => {
+    setProgramOptions(context, options);
   };
 }

@@ -1,6 +1,6 @@
-# murasame
+# Rebake
 
-Murasame 是一个基于 Bun 开发的 CLI 装饰器（Decorator）实现，你可以轻松通过 ECMAScript 最新装饰器语法，来创建自己的命令行工具。
+Rebake 是一个基于 Bun 开发的 CLI 装饰器（Decorator）实现，你可以轻松通过 ECMAScript 最新装饰器语法，来创建自己的命令行工具。
 
 使用其他语言阅读：[English](./README.md) | 简体中文
 
@@ -38,7 +38,7 @@ cli.parse();
 在早期，JS 并没有装饰器的概念，TS 中的装饰器也是通过 [reflect-metadata](https://www.npmjs.com/package/reflect-metadata) 这个依赖库实现的，但它并不是 ECMAScript 的官方规范。现在，我们可以直接通过 Bun 来运行原生装饰器：
 
 ```typescript
-import { Program, Command, Option, execute } from 'murasame';
+import { Command, execute, Option, Program } from 'rebake';
 
 @Command({
   name: 'echo',
@@ -76,7 +76,7 @@ execute(Tools);
 
 ### 什么是 Bun？
 
-Bun 是一个 JavaScript runtime，与 Node.js、Deno 一样，但它可以原生运行 TypeScript 代码，并在 v1.3.10 添加了对新版装饰器的支持。
+Bun 是一个 JavaScript runtime，与 Node.js、Deno 一样，但它可以原生运行 TypeScript 代码，并支持新版装饰器。
 
 你可以在终端执行对应的脚本进行安装：
 
@@ -97,15 +97,15 @@ powershell -c "irm bun.sh/install.ps1|iex"
 在做好准备工作后，我们便可以通过 `bun add` 来添加依赖项：
 
 ```shell
-bun add murasame
+bun add rebake
 ```
 
 ## 使用
 
-以下是一个完整的单文件示例，展示了如何使用 Murasame 快速构建一个具有参数与选项的命令行工具：
+以下是一个完整的单文件示例，展示了如何使用 Rebake 快速构建一个具有参数与选项的命令行工具：
 
 ```typescript
-import { Program, Command, Option, execute } from 'murasame';
+import { Command, execute, Option, Program } from 'rebake';
 
 @Command({
   name: 'echo',
@@ -145,7 +145,7 @@ execute(Tools);
 }
 ```
 
-保存 `cli.ts` 代码后，即可通过 Bun 直接运行。Murasame 会在应用启动时自动收集定义的装饰器元数据（Metadata），并最终输出 CLI 面板：
+保存 `cli.ts` 代码后，即可通过 Bun 直接运行。Rebake 会在应用启动时自动收集定义的装饰器元数据（Metadata），并最终输出 CLI 面板：
 
 ```shell
 $ bun cli.ts
@@ -174,8 +174,8 @@ Usage: my-tools echo [flags] <text>
   Output a text to the terminal.
 
 Flags:
-  -h, --help             Print help text for command.
-  -r, --reverse          Reverse of the string.
+  -h, --help       Display this menu and exit
+  -r, --reverse    Reverse of the string.
 ```
 
 输入对应的命令，即可运行程序，参数将被按顺序注入到构造函数中：
@@ -200,7 +200,7 @@ ollaic
 
 ## API 与说明
 
-Murasame 深度复刻了 Bun 原生 CLI 的默认行为，旨在为使用 Bun 的开发者带来一致的感观体验。
+Rebake 深度复刻了 Bun 原生 CLI 的默认行为，旨在为使用 Bun 的开发者带来一致的感观体验。
 
 ### 程序入口：`@Program(options?: ProgramOptions)`
 
@@ -278,7 +278,7 @@ Blog                             https://blog.yuki.sh
 GitHub                           https://github.com/xueelf
 ```
 
-不同分类之间会有换行符进行分隔，并按照字母顺序进行排列。
+不同分类之间会使用空行分隔。已在 `categories` 中配置的分类按照对象声明顺序排列，未配置的分类保持命令声明顺序。
 
 默认情况下，_Commands:_ 标签内的命令名称会输出黑色加粗样式文本，我们可以通过 `categories` 自定义配置文本样式：
 
@@ -295,7 +295,7 @@ class Tools {}
 
 ### 定义命令：`@Command(options: CommandOptions | string)`
 
-`@Command` 用于声明单个可执行的命令。当该命令被调用时，Murasame 会将终端中输入的参数（Arguments）进行解析，并按顺序向下注入至该类的实例对象中：
+`@Command` 用于声明单个可执行的命令。当该命令被调用时，Rebake 会将终端中输入的参数（Arguments）进行解析，并按顺序向下注入至该类的实例对象中：
 
 ```typescript
 @Command({
@@ -328,16 +328,16 @@ class EchoCommand {
 ```
 
 - **`name`**：命令名称。
-- **`args`**：参数信息。
+- **`args`**：在 Usage 与顶层命令列表中展示的位置参数概要。
 - **`aliases`**：调用别名。
 - **`category`**：命令分类，对应 `@Program` 的 `categories` 键名。
 - **`description`**：命令的说明文本，会自动对齐并显示在命令右侧。
-- **`examples`**：为当前命令添加使用示例。接收一个对象数组，包含 `syntax`（具体语法）与 `description`（说明文本）。
+- **`examples`**：为当前命令添加使用示例。每个对象必须包含完整的调用 `syntax`，也可以附带 `description`；语法文本将保持原样输出。
 - **`epilog`**：在当前命令帮助面板的最底部追加额外的补充说明或提示文本，接受一个字符串数组，每个元素独占一行。
 
 #### args
 
-`args` 用于定义并在终端帮助提示中展示当前命令所需的位置参数（如 `<text>`，`[options]` 等）。当命令被执行时，底层包引擎会将读取到的连续位置参数（Arguments），按照原始的传入顺序依次注入到该命令类的 `constructor` 构造函数中。
+`args` 用于控制 Usage 与顶层命令列表中展示的位置参数文本，例如 `<text>`、`[options]`。它不会推断或校验参数语法。命令执行时，Bun 会将解析到的位置参数按照原始顺序依次传入命令类的 `constructor` 构造函数。
 
 #### aliases
 
@@ -355,7 +355,7 @@ class InstallCommand {}
 
 ### 定义选项：`@Option(options?: OptionOptions)`
 
-选项装饰器必须作用于类的**静态属性（`static`）**。装饰器会根据你的初始 JavaScript 类型（`string` 或 `boolean`）来自动决定这个选项该如何被控制：
+选项装饰器必须作用于类中使用字符串命名的公开**静态属性（`static`）**，并使用 `string` 或 `boolean` 初始值。短名称只能包含一个字母或数字；`help` 和 `-h` 是保留名称：
 
 ```typescript
 @Command('echo')
@@ -382,6 +382,8 @@ false
 true
 true
 ```
+
+初始值为 `true` 的布尔选项可以通过对应的 `--no-<名称>` 关闭，这与 Bun 的命令行行为保持一致。
 
 ```typescript
 @Command('echo')
@@ -419,16 +421,15 @@ index.txt
 - 短参数
   - `-o out`（空格）：POSIX 标准，最广泛的短参数传值方式。
   - `-oout`（紧凑）：POSIX 标准，缩写连写，例如 mysql -uroot -ppassword。
-  - `-o=out`（等号，非规范）
 
-等号 `=` 在规范中通常被设计为专门给长参数（--outfile=out）使用的，短参数使用等号在严格 POSIX 中是**不规范**的。但现代 CLI 解析工具（包括 parseArgs）为了对用户保持最大程度的宽容，通常也会将 -o=out 正确解析。
+等号 `=` 在规范中通常被设计为专门给长参数（--outfile=out）使用的，短参数使用等号在严格 POSIX 中是**不规范**的。请勿使用 `-o=out`，因为 `parseArgs` 会将开头的 `=` 视为参数值的一部分。
 
 ### 执行与运行：`execute(ProgramClass)`
 
 当所有的命令与配置都定义好后，只需要将使用了 `@Program` 装饰器的主体类交由 `execute` 处理即可：
 
 ```typescript
-import { execute } from 'murasame';
+import { execute } from 'rebake';
 
 @Program({
   name: 'my-tools',
@@ -441,41 +442,47 @@ class Tools {}
 execute(Tools);
 ```
 
+`execute` 遵循命令行程序的处理方式：用户输入无效时会将错误写入标准错误流，并立即以状态码 `1` 终止进程。装饰器或命令配置错误则会抛出 `TypeError`。
+
 ## 自定义外观与交互
 
-除了基础的 CLI 装饰器外，Murasame 底层还封装了一套轻量的 C-FFI 层，这使得我们可以轻松调用内置的高性能终端交互 API。除此之外，还提供了文本美化的工具。
+除了基础的 CLI 装饰器外，Rebake 还使用 Bun 与 TypeScript 实现了终端交互，不再附带 C 源码或平台相关二进制文件。除此之外，还提供了文本美化的工具。
 
-### 文本着色：`colorize(color, text)`
+### 文本着色：`colorize(style, text)`
 
 如果你想为终端输出的文本加上醒目的颜色或装饰（如粗体、下划线），可以使用内置的 `colorize` 函数，这能直接将文本处理为 ANSI 控制码序列：
 
 ```typescript
-import { colorize } from 'murasame';
+import { colorize } from 'rebake';
 
 // 单一颜色
-console.log(colorize('cyan', 'Hello, Murasame!'));
+console.log(colorize('cyan', 'Hello, Rebake!'));
 
 // 颜色组合数组：[前景色, 样式]
 console.log(colorize(['#57b497', 'bold'], 'Ciallo～(∠·ω< )⌒★'));
 ```
+
+颜色输出遵循 Bun 的环境变量规则。`FORCE_COLOR` 优先于 `NO_COLOR`：除零值整数以及 `false`、`no`、`off` 外，其它值（包括空字符串）都会强制着色。未强制着色时，`NO_COLOR` 除未设置、空字符串、`0`、`false`、`no`、`off` 外，其它值都会禁用颜色；否则由目标输出流是否为 TTY 决定。
 
 ### 文本输入：`input(message, options?)`
 
 阻塞当前主进程，等待用户在终端窗口输入一段普通的文本：
 
 ```typescript
-import { input } from 'murasame/prompts';
+import { input } from 'rebake/prompts';
 
 const answer = input('What is your name', { default: 'Yuki' });
 console.log(`Hello, ${answer}!`);
 ```
 
-### 多选列表：`select(message, choices)`
+输入正文最多接受 1023 字节。超过限制时会抛出 `RangeError`，不会静默截断。
+
+### 单选列表：`select(message, choices)`
 
 基于终端渲染出一个可使用键盘交互（上下选择与回车确认）的单选列表：
 
 ```typescript
-import { select } from 'murasame/prompts';
+import { select } from 'rebake/prompts';
 
 const framework = select('Choose your favorite framework', [
   { label: 'Vue', value: 'vue' },
@@ -486,18 +493,8 @@ const framework = select('Choose your favorite framework', [
 console.log(`Your choice: ${framework?.value}`);
 ```
 
-除了使用键盘方向键控制上下选择，你还可以使用 `j`、`k` 操作。同时，你可以连按两下 `ESC` 或者直接使用 `Ctrl + c` 来取消。
+每个选项使用字符串类型的 `value`；`label` 控制显示文本，`selected` 用于设置初始选项，`disabled` 用于禁止选中。
+
+除了使用键盘方向键控制上下选择，你还可以使用 `j`、`k` 操作。同时，你可以连按两下 `ESC` 或者直接使用 `Ctrl + c` 来取消，进程会按照 Bun 的行为以状态码 `0` 退出。
 
 细心的你可能已经发现了，不论是 `input` 还是 `select`，在终端的排版样式以及逻辑交互上，也都是与 Bun 的 CLI 完全一致的。
-
-## FAQ
-
-### 名字的由来
-
-_murasame_ 是日语「ムラサメ」的罗马音, 汉字通常写作「村雨」，在英语中被翻译为「秋雨」，指的是一种雨，先猛烈，然后轻柔，时断时续。在日本的传统诗歌中，她经常与秋天的冷雨联系在一起。
-
-同时，她也是游戏《千恋＊万花》中的角色名，中文译为「丛雨」。她为主人排忧解难，伴其左右处理种种事务。我喜欢下雨，也喜欢丛雨，所以我选择了将其作为这个项目的名字。
-
-## 感谢
-
-包名「murasame」最初已经被使用了，但很长时间都没有较为活跃的维护。在与作者取得联系后，[Kamata](https://github.com/kamataryo) 将包权限转交给了我，在这里再次表示感谢！

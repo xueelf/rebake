@@ -1,8 +1,3 @@
-if (Symbol.metadata === undefined) {
-  Reflect.defineProperty(Symbol, 'metadata', {
-    value: Symbol.for('Symbol.metadata'),
-  });
-}
 export * from './decorators';
-export * from './runtime';
-export { colorize } from './utils';
+export { execute } from './runtime/execute';
+export { colorize, type TextStyle } from './utils/terminal';

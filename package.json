@@ -1,39 +1,39 @@
 {
-  "name": "murasame",
-  "version": "0.1.1",
-  "description": "Implementation of a command line interfaces decorators.",
+  "name": "rebake",
+  "version": "0.1.0",
+  "description": "A Bun framework for building command-line applications.",
   "keywords": [
     "bun",
     "cli",
-    "command"
+    "cli-framework",
+    "command-line",
+    "decorators",
+    "terminal"
   ],
-  "homepage": "https://github.com/xueelf/murasame",
-  "bugs": {
-    "url": "https://github.com/xueelf/murasame/issues"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xueelf/rebake.git"
   },
   "license": "MIT",
   "author": "Yuki <admin@yuki.sh>",
-  "files": [
-    "src",
-    "types"
-  ],
-  "main": "src/index.ts",
+  "type": "module",
+  "imports": {
+    "#src/*": "./src/*.ts"
+  },
   "exports": {
     ".": "./src/index.ts",
     "./prompts": "./src/prompts/index.ts"
   },
-  "type": "module",
-  "types": "./types/index.d.ts",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/xueelf/murasame.git"
-  },
+  "files": [
+    "src"
+  ],
   "scripts": {
-    "format": "prettier **/*.ts --write",
-    "lint": "eslint **/*.ts",
-    "test": "bun test",
-    "typecheck": "tsc --noEmit",
-    "prepare": "husky"
+    "format": "prettier \"**/*.{json,md,ts,yaml,yml}\" --write --experimental-cli",
+    "format:check": "prettier \"**/*.{json,md,ts,yaml,yml}\" --check --experimental-cli",
+    "lint": "eslint --cache",
+    "lint:fix": "eslint --fix --cache",
+    "prepare": "husky",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.1",
@@ -44,10 +44,9 @@
     "eslint": "^10.8.0",
     "husky": "^9.1.7",
     "prettier": "^3.9.6",
+    "prettier-plugin-sort": "^1.0.0",
+    "typescript": "^6.0.3",
     "typescript-eslint": "^8.65.0"
-  },
-  "peerDependencies": {
-    "typescript": "^6.0.2"
   },
   "devEngines": {
     "runtime": {
