@@ -157,6 +157,8 @@ export const ANSI = {
   RESET,
   CURSOR_HIDE: '\x1b[?25l',
   CURSOR_SHOW: '\x1b[?25h',
+  CURSOR_SAVE: '\x1b7',
+  CURSOR_RESTORE: '\x1b8',
   CLEAR_TO_END: '\x1b[0K',
   ERASE_DOWN: '\x1b[0J',
   CURSOR_UP: (lineCount: number) => `\x1b[${lineCount}A`,

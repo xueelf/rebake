@@ -70,6 +70,27 @@ export function enterInputMode(): (() => void) | undefined {
   return updateWindowsInputMode(0, ENABLE_VIRTUAL_TERMINAL_INPUT);
 }
 
+export function enterValidatedInputMode(): (() => void) | undefined {
+  // 校验失败后需要保留并重绘输入，因此必须由应用接管终端回显和行编辑。
+  if (process.platform === 'win32') {
+    return enterSelectMode();
+  }
+
+  if (
+    process.stdin.isTTY !== true ||
+    typeof process.stdin.setRawMode !== 'function'
+  ) {
+    return undefined;
+  }
+  const setRawMode = process.stdin.setRawMode.bind(process.stdin);
+
+  setRawMode(true);
+
+  return () => {
+    setRawMode(false);
+  };
+}
+
 export function enterSelectMode(): (() => void) | undefined {
   if (process.platform !== 'win32') {
     return undefined;

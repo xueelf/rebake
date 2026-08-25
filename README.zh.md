@@ -471,11 +471,16 @@ console.log(colorize(['#57b497', 'bold'], 'Ciallo～(∠·ω< )⌒★'));
 ```typescript
 import { input } from 'rebake/prompts';
 
-const answer = input('What is your name', { default: 'Yuki' });
+const answer = input('What is your name', {
+  default: 'Yuki',
+  validate: value => value.length >= 2 || '名字太短。',
+});
 console.log(`Hello, ${answer}!`);
 ```
 
 输入正文最多接受 1023 字节。超过限制时会抛出 `RangeError`，不会静默截断。
+
+`validate` 会在用户提交时同步执行。返回 `true` 表示接受当前值，返回 `false` 会显示通用错误，返回字符串则会把该字符串作为错误显示在当前输入框下方。校验失败时会保留原输入并原位重绘，不会产生重复的输入行。如果输入输出流不是交互式终端，校验失败会抛出 `Error`，因为此时无法让用户原位修改。
 
 ### 单选列表：`select(message, choices)`
 

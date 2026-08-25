@@ -157,39 +157,38 @@ async function runSelectFailureFromPipe(): Promise<{
 async function runInputInTerminal(
   color: boolean,
 ): Promise<PromptProcessResult> {
-  const decoder = new TextDecoder();
-  let output = '';
   let inputSent = false;
-  const { promise: terminalExited, resolve: resolveTerminalExit } =
-    Promise.withResolvers<void>();
-  const subprocess = Bun.spawn({
-    cmd: [process.execPath, join(import.meta.dir, 'fixtures/input.ts')],
-    cwd: join(import.meta.dir, '..'),
-    env: getTerminalEnv(color),
-    terminal: {
-      data(terminal, data) {
-        output += decoder.decode(data, { stream: true });
 
-        if (!inputSent && output.includes('(rebake):')) {
-          inputSent = true;
-          terminal.write('audit\r');
-        }
-      },
-      exit() {
-        resolveTerminalExit();
-      },
-    },
+  return runPromptInTerminal('input.ts', color, (terminal, output) => {
+    if (!inputSent && output.includes('(rebake):')) {
+      inputSent = true;
+      terminal.write('audit\r');
+    }
   });
-  const [exitCode] = await Promise.all([subprocess.exited, terminalExited]);
+}
 
-  output += decoder.decode();
+async function runValidatedInputInTerminal(
+  color: boolean,
+): Promise<PromptProcessResult> {
+  let invalidInputSent = false;
+  let correctionSent = false;
 
-  return {
-    exitCode,
-    output: stripVTControlCharacters(output).replaceAll('\r\n', '\n'),
-    rawOutput: output,
-    result: output.match(/RESULT=([^\r\n]+)/)?.[1] ?? '',
-  };
+  return runPromptInTerminal(
+    'input-validation.ts',
+    color,
+    (terminal, output) => {
+      if (!invalidInputSent && output.includes('(rebake):')) {
+        invalidInputSent = true;
+        terminal.write('rebake!\r');
+      } else if (
+        !correctionSent &&
+        output.includes('Only lowercase letters are allowed.')
+      ) {
+        correctionSent = true;
+        terminal.write('\x7f\r');
+      }
+    },
+  );
 }
 
 describe('input prompt', () => {
@@ -197,6 +196,7 @@ describe('input prompt', () => {
     const invalidMessage = JSON.parse('1');
     const invalidOptions = JSON.parse('null');
     const invalidDefault = JSON.parse('{"default":1}');
+    const invalidValidator = JSON.parse('{"validate":1}');
 
     expect(() => input(invalidMessage)).toThrow(
       'Input message must be a string.',
@@ -207,6 +207,28 @@ describe('input prompt', () => {
     expect(() => input('', invalidDefault)).toThrow(
       'Input default value must be a string.',
     );
+    expect(() => input('', invalidValidator)).toThrow(
+      'Input validator must be a function.',
+    );
+  });
+
+  test('validates submitted values without an interactive terminal', async () => {
+    const valid = await runPromptFromPipe(
+      new TextEncoder().encode('rebake\n'),
+      'input-validation.ts',
+    );
+    const defaulted = await runPromptFromPipe([10], 'input-validation.ts');
+    const invalid = await runPromptFromPipe(
+      new TextEncoder().encode('Rebake\n'),
+      'input-validation.ts',
+    );
+
+    expect(valid.exitCode).toBe(0);
+    expect(valid.result).toBe('rebake');
+    expect(defaulted.exitCode).toBe(0);
+    expect(defaulted.result).toBe('rebake');
+    expect(invalid.exitCode).toBe(1);
+    expect(invalid.result).toContain('Only lowercase letters are allowed.');
   });
 
   test('uses defaults only for submitted empty input', async () => {
@@ -289,6 +311,141 @@ describe('input prompt', () => {
       expect(colored.rawOutput).toBe(
         '\x1b[0m\x1b[36mpackage name\x1b[0m \x1b[2m(rebake):\x1b[0m audit\r\nRESULT=audit\r\n',
       );
+    });
+
+    test('redraws validation errors without repeating the prompt', async () => {
+      const plain = await runValidatedInputInTerminal(false);
+      const colored = await runValidatedInputInTerminal(true);
+
+      expect(plain.exitCode).toBe(0);
+      expect(plain.result).toBe('rebake');
+      expect(plain.rawOutput.match(/package name/g)).toHaveLength(1);
+      expect(plain.rawOutput).toBe(
+        'package name (rebake): ' +
+          '\x1b7' +
+          'rebake!\r\n' +
+          '\x1b8\x1b[0Jrebake!\r\n' +
+          '> Only lowercase letters are allowed.\x1b8rebake!' +
+          '\x1b8\x1b[0Jrebake' +
+          '\x1b8\x1b[0Jrebake\r\n' +
+          'RAW=false\r\n' +
+          'RESULT=rebake\r\n',
+      );
+
+      expect(colored.exitCode).toBe(0);
+      expect(colored.result).toBe('rebake');
+      expect(colored.rawOutput.match(/package name/g)).toHaveLength(1);
+      expect(colored.output).toBe(plain.output);
+      expect(colored.rawOutput).toContain(
+        '\x1b[0m\x1b[31m> Only lowercase letters are allowed.\x1b[0m',
+      );
+    });
+
+    test('does not redraw valid text for every input byte', async () => {
+      const value = 'a'.repeat(1023);
+      let inputSent = false;
+      const result = await runPromptInTerminal(
+        'input-validation.ts',
+        false,
+        (terminal, output) => {
+          if (!inputSent && output.includes('(rebake):')) {
+            inputSent = true;
+            terminal.write(`${value}\r`);
+          }
+        },
+      );
+
+      expect(result.exitCode).toBe(0);
+      expect(result.result).toBe(value);
+      expect(result.rawOutput.length).toBeLessThan(value.length * 3);
+    });
+
+    test('reapplies the default after an invalid value is cleared', async () => {
+      let invalidInputSent = false;
+      let correctionSent = false;
+      let secondInputSent = false;
+      const result = await runPromptInTerminal(
+        'input-validation-next.ts',
+        false,
+        (terminal, output) => {
+          if (!invalidInputSent && output.includes('(rebake):')) {
+            invalidInputSent = true;
+            terminal.write('BAD\r');
+          } else if (
+            !correctionSent &&
+            output.includes('Only lowercase letters are allowed.')
+          ) {
+            correctionSent = true;
+            terminal.write(`${'\x7f'.repeat(3)}\r`);
+          } else if (!secondInputSent && output.includes('(fallback):')) {
+            secondInputSent = true;
+            terminal.write('manual\r');
+          }
+        },
+      );
+
+      expect(result.exitCode).toBe(0);
+      expect(JSON.parse(result.result)).toEqual({
+        first: 'rebake',
+        second: 'manual',
+      });
+    });
+
+    test('consumes the LF paired with a corrected CR submission', async () => {
+      let invalidInputSent = false;
+      let correctionSent = false;
+      let secondInputSent = false;
+      const result = await runPromptInTerminal(
+        'input-validation-next.ts',
+        false,
+        (terminal, output) => {
+          if (!invalidInputSent && output.includes('(rebake):')) {
+            invalidInputSent = true;
+            terminal.write('BAD\r');
+          } else if (
+            !correctionSent &&
+            output.includes('Only lowercase letters are allowed.')
+          ) {
+            correctionSent = true;
+            terminal.write(`${'\x7f'.repeat(3)}ok\r\n`);
+          } else if (!secondInputSent && output.includes('(fallback):')) {
+            secondInputSent = true;
+            terminal.write('manual\r');
+          }
+        },
+      );
+
+      expect(result.exitCode).toBe(0);
+      expect(JSON.parse(result.result)).toEqual({
+        first: 'ok',
+        second: 'manual',
+      });
+    });
+
+    test('batches queued backspaces into one corrected-input redraw', async () => {
+      const invalidValue = 'A'.repeat(1023);
+      let invalidInputSent = false;
+      let correctionSent = false;
+      const result = await runPromptInTerminal(
+        'input-validation.ts',
+        false,
+        (terminal, output) => {
+          if (!invalidInputSent && output.includes('(rebake):')) {
+            invalidInputSent = true;
+            terminal.write(`${invalidValue}\r`);
+          } else if (
+            !correctionSent &&
+            output.includes('Only lowercase letters are allowed.')
+          ) {
+            correctionSent = true;
+            terminal.write(`${'\x7f'.repeat(1023)}a\r`);
+          }
+        },
+      );
+
+      expect(result.exitCode).toBe(0);
+      expect(result.result).toBe('a');
+      expect(result.rawOutput.length).toBeLessThan(invalidValue.length * 10);
     });
   }
 });
