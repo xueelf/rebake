@@ -17,12 +17,18 @@ export interface SelectChoice {
 
 type InteractionState = 'active' | 'cancelled' | 'confirmed';
 
+const LINE_BREAK_PATTERN = /[\n\r\v\f\u0085\u2028\u2029]/u;
+
 function validateSelectArguments(
   message: string,
   choices: readonly SelectChoice[],
 ): void {
   if (typeof message !== 'string') {
     throw new TypeError('Select message must be a string.');
+  }
+
+  if (LINE_BREAK_PATTERN.test(message)) {
+    throw new TypeError('Select message must be a single line.');
   }
 
   if (!Array.isArray(choices)) {
@@ -55,6 +61,12 @@ function validateSelectArguments(
     if (choice.selected !== undefined && typeof choice.selected !== 'boolean') {
       throw new TypeError(
         `Select choice selected state at index ${index} must be a boolean.`,
+      );
+    }
+
+    if (LINE_BREAK_PATTERN.test(getChoiceLabel(choice))) {
+      throw new TypeError(
+        `Select choice label at index ${index} must be a single line.`,
       );
     }
   }
@@ -105,16 +117,33 @@ function renderChoiceLine(choice: SelectChoice, isSelected: boolean): string {
 function drawChoices(
   choices: readonly SelectChoice[],
   selectedIndex: number,
-  moveCursorUp = true,
-): void {
-  if (moveCursorUp) {
-    writeStdout(ANSI.CURSOR_UP(choices.length));
+  replacedChoiceCount = 0,
+): number {
+  const availableRows = process.stdout.rows;
+  const visibleChoiceCount = Math.min(
+    choices.length,
+    availableRows === undefined
+      ? choices.length
+      : Math.max(1, availableRows - 2),
+  );
+  const firstVisibleIndex = Math.min(
+    Math.max(0, selectedIndex - visibleChoiceCount + 1),
+    choices.length - visibleChoiceCount,
+  );
+  const lastVisibleIndex = firstVisibleIndex + visibleChoiceCount;
+
+  // 只重绘当前终端容得下的窗口，避免滚屏后回移到并不存在的历史行。
+  if (replacedChoiceCount > 0) {
+    writeStdout(ANSI.CURSOR_UP(replacedChoiceCount));
   }
 
-  for (const [index, choice] of choices.entries()) {
+  for (let index = firstVisibleIndex; index < lastVisibleIndex; index += 1) {
+    const choice = choices[index]!;
+
     writeStdout(renderChoiceLine(choice, index === selectedIndex));
   }
   writeStdout(ANSI.ERASE_DOWN);
+  return visibleChoiceCount;
 }
 
 function clearInteractiveBlock(choiceCount: number): void {
@@ -166,6 +195,7 @@ export function select(
   let interactionState: InteractionState = 'active';
   // Bun 使用数字快捷键时返回目标项，但完成行仍显示快捷键触发前的高亮项。
   let completionChoiceIndex = selectedIndex;
+  let renderedChoiceCount: number;
   let restoreTerminalMode: (() => void) | undefined;
 
   try {
@@ -189,7 +219,7 @@ export function select(
         writeStdout(ANSI.CURSOR_HIDE);
       }
       // 首次渲染不回移光标，之后每次按键都覆盖整个选项区域。
-      drawChoices(choices, selectedIndex, false);
+      renderedChoiceCount = drawChoices(choices, selectedIndex);
 
       while (interactionState === 'active') {
         const inputByte = readSelectByteOrEof();
@@ -258,10 +288,14 @@ export function select(
             );
             completionChoiceIndex = selectedIndex;
           }
-          drawChoices(choices, selectedIndex);
+          renderedChoiceCount = drawChoices(
+            choices,
+            selectedIndex,
+            renderedChoiceCount,
+          );
         }
       }
-      clearInteractiveBlock(choices.length);
+      clearInteractiveBlock(renderedChoiceCount);
 
       const completionChoice = choices[completionChoiceIndex];
 

@@ -507,6 +507,8 @@ console.log(`Your choice: ${framework?.value}`);
 
 Each choice uses a string `value`; `label` controls the displayed text, `selected` sets the initial choice, and `disabled` prevents a choice from being selected.
 
+The message and displayed choice labels must each fit on one logical line. When the list is taller than the terminal, Rebake keeps the selected choice inside a terminal-sized visible window.
+
 Besides interacting visually with keyboard arrow keys, you can also operate using `j` and `k`. Simultaneously, triggering a double press of `ESC` or directly hitting `Ctrl + c` will cancel the operation and exit the process with status `0`.
 
 If you are careful enough, you might have already noticed that whether it's `input` or `select`, their terminal layout styling and logical interactive behaviors are entirely identical to the native Bun CLI.

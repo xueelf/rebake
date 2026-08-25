@@ -13,6 +13,11 @@ interface PromptProcessResult {
   result: string;
 }
 
+interface TerminalSize {
+  cols?: number;
+  rows?: number;
+}
+
 // 显式固定颜色状态，避免开发者本机和不同 CI 环境影响原始字节快照。
 function getTerminalEnv(color: boolean): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = {
@@ -33,28 +38,25 @@ function getTerminalEnv(color: boolean): Record<string, string | undefined> {
   return env;
 }
 
-async function runSelectInTerminal(
-  inputBytes: readonly number[],
-  color = false,
+async function runPromptInTerminal(
+  fixture: string,
+  color: boolean,
+  interact: (terminal: Bun.Terminal, output: string) => void,
+  terminalSize: TerminalSize = {},
 ): Promise<PromptProcessResult> {
   const decoder = new TextDecoder();
   let output = '';
-  let inputSent = false;
   const { promise: terminalExited, resolve: resolveTerminalExit } =
     Promise.withResolvers<void>();
   const subprocess = Bun.spawn({
-    cmd: [process.execPath, join(import.meta.dir, 'fixtures/select.ts')],
+    cmd: [process.execPath, join(import.meta.dir, 'fixtures', fixture)],
     cwd: join(import.meta.dir, '..'),
     env: getTerminalEnv(color),
     terminal: {
+      ...terminalSize,
       data(terminal, data) {
         output += decoder.decode(data, { stream: true });
-
-        // 等待首屏完整渲染后再发送按键，避免测试与终端初始化竞争。
-        if (!inputSent && output.includes(ANSI.ERASE_DOWN)) {
-          inputSent = true;
-          terminal.write(Uint8Array.from(inputBytes));
-        }
+        interact(terminal, output);
       },
       exit() {
         resolveTerminalExit();
@@ -72,6 +74,28 @@ async function runSelectInTerminal(
     rawOutput: output,
     result: output.match(/RESULT=([^\r\n]+)/)?.[1] ?? '',
   };
+}
+
+async function runSelectInTerminal(
+  inputBytes: readonly number[],
+  color = false,
+  fixture = 'select.ts',
+  terminalSize?: TerminalSize,
+): Promise<PromptProcessResult> {
+  let inputSent = false;
+
+  return runPromptInTerminal(
+    fixture,
+    color,
+    (terminal, output) => {
+      // 等待首屏完整渲染后再发送按键，避免测试与终端初始化竞争。
+      if (!inputSent && output.includes(ANSI.ERASE_DOWN)) {
+        inputSent = true;
+        terminal.write(Uint8Array.from(inputBytes));
+      }
+    },
+    terminalSize,
+  );
 }
 
 async function runPromptFromPipe(
@@ -287,6 +311,12 @@ describe('select prompt', () => {
     expect(() => select('', invalidChoices)).toThrow(
       'Select choices must be an array.',
     );
+    expect(() => select('Choose\nnow', [{ value: 'one' }])).toThrow(
+      'Select message must be a single line.',
+    );
+    expect(() => select('Choose', [{ value: 'one\nline' }])).toThrow(
+      'Select choice label at index 0 must be a single line.',
+    );
 
     for (const choice of invalidChoiceValues) {
       expect(() => select('', [choice])).toThrow(TypeError);
@@ -434,6 +464,23 @@ describe('select prompt', () => {
       expect(result.exitCode).toBe(0);
       expect(result.output).toContain('✓ Select a project template: Blank\n');
       expect(result.result).toBe('blank');
+    });
+
+    test('keeps long choice lists inside the terminal viewport', async () => {
+      const result = await runSelectInTerminal(
+        [106, 106, 106, 13],
+        false,
+        'select-many.ts',
+        { cols: 80, rows: 5 },
+      );
+
+      expect(result.exitCode).toBe(0);
+      expect(result.result).toBe('4');
+      expect(result.output).toContain('✓ Choose: Choice 4\n');
+      expect(result.rawOutput).toContain(ANSI.CURSOR_UP(3));
+      expect(result.rawOutput).toContain(ANSI.CURSOR_UP(4));
+      expect(result.rawOutput).not.toContain(ANSI.CURSOR_UP(8));
+      expect(result.rawOutput).not.toContain(ANSI.CURSOR_UP(9));
     });
   }
 });
