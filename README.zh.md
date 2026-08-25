@@ -159,7 +159,7 @@ Usage: my-tools <command> [...flags] [...args]
 Commands:
   echo      <text>               Output a text to the terminal.
 
-  <command> --help               Print help text for command.
+  <command> --help               Print help text for command
 ```
 
 如果不知道命令支持哪些选项，也可以追加 `-h` 获得该命令的说明文档：
@@ -250,7 +250,7 @@ Commands:
   ping      <host>               Check the network connectivity to a host.
   rm        <path>               Remove a file or directory.
 
-  <command> --help               Print help text for command.
+  <command> --help               Print help text for command
 
 Blog                             https://blog.yuki.sh
 GitHub                           https://github.com/xueelf
@@ -272,7 +272,7 @@ Commands:
 
   echo      <text>               Output a text to the terminal.
 
-  <command> --help               Print help text for command.
+  <command> --help               Print help text for command
 
 Blog                             https://blog.yuki.sh
 GitHub                           https://github.com/xueelf

@@ -251,7 +251,7 @@ describe('execute', () => {
         'Commands:\n' +
         '  build     <target>             Build a target. (tool b)\n' +
         '\n' +
-        '  <command> --help               Print help text for command.\n' +
+        '  <command> --help               Print help text for command\n' +
         '\n' +
         'Flags:\n' +
         '  -h, --help                          Display this menu and exit\n' +

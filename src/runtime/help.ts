@@ -208,7 +208,7 @@ function renderCommandRows(program: ProgramDefinition): string[] {
     renderAlignedHelpRow(
       styleHelpText('dim', helpName),
       styleHelpText(['bold', 'cyan'], helpSynopsis),
-      'Print help text for command.',
+      'Print help text for command',
     ),
   );
 
