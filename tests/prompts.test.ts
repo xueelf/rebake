@@ -160,7 +160,7 @@ async function runInputInTerminal(
   let inputSent = false;
 
   return runPromptInTerminal('input.ts', color, (terminal, output) => {
-    if (!inputSent && output.includes('(rebake):')) {
+    if (!inputSent && stripVTControlCharacters(output).endsWith('(rebake): ')) {
       inputSent = true;
       terminal.write('audit\r');
     }
@@ -177,7 +177,8 @@ async function runValidatedInputInTerminal(
     'input-validation.ts',
     color,
     (terminal, output) => {
-      if (!invalidInputSent && output.includes('(rebake):')) {
+      // 等待提示及光标保存写完，避免输入回显与首屏输出交错。
+      if (!invalidInputSent && output.includes(ANSI.CURSOR_SAVE)) {
         invalidInputSent = true;
         terminal.write('rebake!\r');
       } else if (
@@ -348,7 +349,7 @@ describe('input prompt', () => {
         'input-validation.ts',
         false,
         (terminal, output) => {
-          if (!inputSent && output.includes('(rebake):')) {
+          if (!inputSent && output.includes(ANSI.CURSOR_SAVE)) {
             inputSent = true;
             terminal.write(`${value}\r`);
           }
@@ -368,7 +369,7 @@ describe('input prompt', () => {
         'input-validation-next.ts',
         false,
         (terminal, output) => {
-          if (!invalidInputSent && output.includes('(rebake):')) {
+          if (!invalidInputSent && output.includes(ANSI.CURSOR_SAVE)) {
             invalidInputSent = true;
             terminal.write('BAD\r');
           } else if (
@@ -399,7 +400,7 @@ describe('input prompt', () => {
         'input-validation-next.ts',
         false,
         (terminal, output) => {
-          if (!invalidInputSent && output.includes('(rebake):')) {
+          if (!invalidInputSent && output.includes(ANSI.CURSOR_SAVE)) {
             invalidInputSent = true;
             terminal.write('BAD\r');
           } else if (
@@ -430,7 +431,7 @@ describe('input prompt', () => {
         'input-validation.ts',
         false,
         (terminal, output) => {
-          if (!invalidInputSent && output.includes('(rebake):')) {
+          if (!invalidInputSent && output.includes(ANSI.CURSOR_SAVE)) {
             invalidInputSent = true;
             terminal.write(`${invalidValue}\r`);
           } else if (
