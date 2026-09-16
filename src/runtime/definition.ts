@@ -57,12 +57,6 @@ function assertOptionName(commandName: string, optionName: string): void {
       `Option on command "${commandName}" cannot start with "no-" because Bun reserves that prefix for negated boolean options.`,
     );
   }
-
-  if (optionName === '__proto__') {
-    throw new TypeError(
-      `Option on command "${commandName}" cannot be named "__proto__" because Bun does not return a value for that option.`,
-    );
-  }
 }
 
 function validateOptions(
@@ -87,20 +81,85 @@ function validateOptions(
   }
 }
 
-function validateCategoryStyles(
-  categories: ProgramOptions['categories'],
-): void {
+function validateProgramOptions(options: ProgramOptions): void {
+  for (const key of ['name', 'description', 'version'] as const) {
+    if (options[key] !== undefined && typeof options[key] !== 'string') {
+      throw new TypeError(`@Program() ${key} must be a string.`);
+    }
+  }
+
+  if (options.commands !== undefined && !Array.isArray(options.commands)) {
+    throw new TypeError(
+      '@Program() commands must be an array of command classes.',
+    );
+  }
+
+  for (const key of ['categories', 'details'] as const) {
+    const value = options[key];
+
+    if (
+      value !== undefined &&
+      (typeof value !== 'object' || value === null || Array.isArray(value))
+    ) {
+      throw new TypeError(`@Program() ${key} must be an object.`);
+    }
+  }
+
+  for (const value of Object.values(options.details ?? {})) {
+    if (typeof value !== 'string') {
+      throw new TypeError('@Program() details values must be strings.');
+    }
+  }
   // 分类配置属于程序定义，不能等到彩色帮助渲染时才暴露非法值。
-  for (const style of Object.values(categories ?? {})) {
+  for (const style of Object.values(options.categories ?? {})) {
     validateTextStyle(style);
   }
 }
 
-function validateExamples(commandOptions: CommandOptions): void {
-  for (const example of commandOptions.examples ?? []) {
+function validateCommandOptions(options: CommandOptions): void {
+  assertName('Command', options.name);
+
+  for (const key of ['args', 'description', 'category'] as const) {
+    if (options[key] !== undefined && typeof options[key] !== 'string') {
+      throw new TypeError(`@Command() ${key} must be a string.`);
+    }
+  }
+
+  for (const key of ['aliases', 'examples', 'epilog'] as const) {
+    if (options[key] !== undefined && !Array.isArray(options[key])) {
+      throw new TypeError(`@Command() ${key} must be an array.`);
+    }
+  }
+
+  for (const line of options.epilog ?? []) {
+    if (typeof line !== 'string') {
+      throw new TypeError('@Command() epilog entries must be strings.');
+    }
+  }
+
+  for (const example of options.examples ?? []) {
+    if (
+      typeof example !== 'object' ||
+      example === null ||
+      Array.isArray(example)
+    ) {
+      throw new TypeError('@Command() examples entries must be objects.');
+    }
+
+    if (typeof example.syntax !== 'string') {
+      throw new TypeError('@Command() example syntax must be a string.');
+    }
+
+    if (
+      example.description !== undefined &&
+      typeof example.description !== 'string'
+    ) {
+      throw new TypeError('@Command() example description must be a string.');
+    }
+
     if (example.syntax.trim().length === 0) {
       throw new TypeError(
-        `Example syntax for command "${commandOptions.name}" cannot be empty.`,
+        `Example syntax for command "${options.name}" cannot be empty.`,
       );
     }
   }
@@ -116,17 +175,23 @@ export function createProgramDefinition(
       `Class "${ProgramClass.name}" must be decorated with @Program().`,
     );
   }
+  validateProgramOptions(programOptions);
+
   const executableName =
     programOptions.name ??
     (ProgramClass.name.length > 0 ? ProgramClass.name : 'cli');
 
   assertName('Program', executableName);
-  validateCategoryStyles(programOptions.categories);
 
   const commands: CommandDefinition[] = [];
   const commandLookup = new Map<string, CommandDefinition>();
 
   for (const commandClass of programOptions.commands ?? []) {
+    if (typeof commandClass !== 'function') {
+      throw new TypeError(
+        '@Program() commands entries must be command classes.',
+      );
+    }
     const commandOptions = getCommandOptions(commandClass);
 
     if (!commandOptions) {
@@ -134,8 +199,7 @@ export function createProgramDefinition(
         `Command class "${commandClass.name}" must be decorated with @Command().`,
       );
     }
-    assertName('Command', commandOptions.name);
-    validateExamples(commandOptions);
+    validateCommandOptions(commandOptions);
 
     const aliases = commandOptions.aliases ?? [];
     const optionRegistry = getOptionRegistry(commandClass) ?? new Map();

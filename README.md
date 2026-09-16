@@ -135,15 +135,17 @@ class Tools {}
 execute(Tools);
 ```
 
-If you've **manually configured** the `lib` option in the `compilerOptions` node of your `tsconfig.json`, you'll need to append `"ESNext.Decorators"` to get the latest decorator syntax support when using native TypeScript decorators:
+If you've **manually configured** the `lib` option in your `tsconfig.json`, `"ESNext"` already includes the standard decorator types:
 
 ```json
 {
   "compilerOptions": {
-    "lib": ["ESNext", "ESNext.Decorators"]
+    "lib": ["ESNext"]
   }
 }
 ```
+
+If you use an older ECMAScript library such as `"ES2022"`, add `"ESNext.Decorators"` alongside it to include the decorator types.
 
 After saving the `cli.ts` code, you can run it directly with Bun. Rebake will automatically collect the defined decorator metadata upon application startup, and finally output the CLI panel:
 

@@ -18,6 +18,12 @@ export interface CommandOptions {
 }
 
 export function Command(options: CommandOptions | string) {
+  if (
+    typeof options !== 'string' &&
+    (typeof options !== 'object' || options === null || Array.isArray(options))
+  ) {
+    throw new TypeError('@Command() options must be a string or object.');
+  }
   const normalizedOptions: CommandOptions =
     typeof options === 'string' ? { name: options } : options;
 

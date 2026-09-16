@@ -135,15 +135,17 @@ class Tools {}
 execute(Tools);
 ```
 
-如果你在 `tsconfig.json` 的 `compilerOptions` 中，**手动配置**了 `lib` 选项，那么在使用 TypeScript 原生装饰器时，你需要追加配置 `"ESNext.Decorators"` 来获取最新的装饰器语法支持：
+如果你在 `tsconfig.json` 中**手动配置**了 `lib` 选项，`"ESNext"` 本身已经包含标准装饰器所需的类型：
 
 ```json
 {
   "compilerOptions": {
-    "lib": ["ESNext", "ESNext.Decorators"]
+    "lib": ["ESNext"]
   }
 }
 ```
+
+如果使用的是 `"ES2022"` 等较早的 ECMAScript 类型库，则需要在其后追加 `"ESNext.Decorators"`。
 
 保存 `cli.ts` 代码后，即可通过 Bun 直接运行。Rebake 会在应用启动时自动收集定义的装饰器元数据（Metadata），并最终输出 CLI 面板：
 

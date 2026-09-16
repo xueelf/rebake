@@ -17,6 +17,13 @@ export interface ProgramOptions {
 }
 
 export function Program(options: ProgramOptions = {}) {
+  if (
+    typeof options !== 'object' ||
+    options === null ||
+    Array.isArray(options)
+  ) {
+    throw new TypeError('@Program() options must be an object.');
+  }
   return (
     _target: ProgramConstructor,
     context: ClassDecoratorContext<ProgramConstructor>,

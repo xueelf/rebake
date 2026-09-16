@@ -1,4 +1,4 @@
-import { bindOptionMetadata, registerOption } from '#src/internal/metadata';
+import { registerOption } from '#src/internal/metadata';
 
 export interface OptionOptions {
   description?: string;
@@ -8,7 +8,25 @@ export interface OptionOptions {
 export type OptionValue = boolean | string;
 
 export function Option(options: OptionOptions = {}) {
-  if (options.short !== undefined && !/^[A-Za-z0-9]$/.test(options.short)) {
+  if (
+    typeof options !== 'object' ||
+    options === null ||
+    Array.isArray(options)
+  ) {
+    throw new TypeError('@Option() options must be an object.');
+  }
+
+  if (
+    options.description !== undefined &&
+    typeof options.description !== 'string'
+  ) {
+    throw new TypeError('@Option() description must be a string.');
+  }
+
+  if (
+    options.short !== undefined &&
+    (typeof options.short !== 'string' || !/^[A-Za-z0-9]$/.test(options.short))
+  ) {
     throw new TypeError('@Option() short must be one alphanumeric character.');
   }
 
@@ -19,6 +37,10 @@ export function Option(options: OptionOptions = {}) {
     _target: undefined,
     context: ClassFieldDecoratorContext<This, Value>,
   ) => {
+    if (context.kind !== 'field') {
+      throw new TypeError('@Option() can only be used on fields.');
+    }
+
     if (!context.static) {
       throw new TypeError(
         `@Option() can only be used on static properties. Property "${String(context.name)}" is not static.`,
@@ -39,9 +61,16 @@ export function Option(options: OptionOptions = {}) {
         '@Option() cannot use the reserved property name "help".',
       );
     }
-    bindOptionMetadata(context);
 
-    return (initialValue: Value): Value => {
+    if (name === '__proto__') {
+      throw new TypeError(
+        '@Option() cannot be named "__proto__" because Bun does not create that static field.',
+      );
+    }
+    context.addInitializer(function () {
+      // 等待同一字段的所有值初始化器完成，避免登记其它装饰器转换前的中间值。
+      const initialValue = context.access.get(this);
+
       if (
         typeof initialValue !== 'boolean' &&
         typeof initialValue !== 'string'
@@ -50,14 +79,11 @@ export function Option(options: OptionOptions = {}) {
           `@Option() property "${name}" must be initialized with a boolean or string.`,
         );
       }
-      // 装饰器只能在字段初始化时可靠取得值类型和默认值。
-      registerOption(context.metadata, name, {
+      registerOption(this as object, context.metadata, name, {
         ...options,
         type: typeof initialValue === 'boolean' ? 'boolean' : 'string',
         defaultValue: initialValue,
       });
-
-      return initialValue;
-    };
+    });
   };
 }

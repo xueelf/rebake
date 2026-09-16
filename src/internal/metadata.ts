@@ -43,16 +43,6 @@ function bindClassMetadata(
   });
 }
 
-export function bindOptionMetadata<This, Value>(
-  context: ClassFieldDecoratorContext<This, Value>,
-): void {
-  const rebakeMetadata = requireDecoratorMetadata(context.metadata);
-
-  context.addInitializer(function () {
-    metadataByClass.set(this as object, rebakeMetadata);
-  });
-}
-
 export function setProgramOptions(
   context: ClassDecoratorContext,
   options: ProgramOptions,
@@ -74,6 +64,7 @@ export function setCommandOptions(
 }
 
 export function registerOption(
+  target: object,
   metadata: DecoratorMetadata,
   name: string,
   option: RegisteredOption,
@@ -88,6 +79,8 @@ export function registerOption(
     rebakeMetadata[OPTION_REGISTRY] = options;
   }
   options.set(name, option);
+  // 字段初始化器传入最终类，同时支持没有类装饰器的选项基类。
+  metadataByClass.set(target, rebakeMetadata);
 }
 
 export function getProgramOptions(target: object): ProgramOptions | undefined {
