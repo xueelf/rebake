@@ -63,9 +63,9 @@ function isForceColorEnabled(value: string | undefined): boolean {
     return false;
   }
 
-  // Bun 将空字符串视为开启，并将合法的零值整数与常见假值视为未强制着色。
+  // Bun 的十进制零值允许正负号及数字间连续下划线；空字符串仍视为开启。
   return !(
-    /^-?0(?:_?0)*$/.test(value) ||
+    /^[+-]?0(?:[0_]*0)?$/.test(value) ||
     FALSE_FORCE_COLOR_VALUES.has(value.toLowerCase())
   );
 }
