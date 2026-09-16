@@ -1,4 +1,5 @@
-import { closeSync, constants, openSync, readSync } from 'node:fs';
+import { dlopen } from 'bun:ffi';
+import { readSync } from 'node:fs';
 
 const stdinByteBuffer = new Uint8Array(1);
 let preservedStdinByte: number | undefined;
@@ -36,33 +37,40 @@ export function openNonBlockingStdinReader():
   if (process.platform === 'win32') {
     return undefined;
   }
-  // CRLF 归一化和连续退格合并只能检查已经到达终端的字节，不能阻塞等待后续输入。
-  const fileDescriptor = openSync(
-    '/dev/tty',
-    constants.O_RDONLY | constants.O_NONBLOCK,
+  // musl 的加载器也将 libc.* 解析为自身，因此 Linux 无需额外的库名回退。
+  const library = dlopen(
+    process.platform === 'darwin' ? 'libc.dylib' : 'libc.so.6',
+    {
+      poll: {
+        args: ['ptr', process.platform === 'darwin' ? 'u32' : 'u64', 'i32'],
+        returns: 'i32',
+      },
+    } as const,
   );
-  const inputByteBuffer = new Uint8Array(1);
+  // pollfd 由 int fd、short events 和 short revents 组成；Bun 平台均为小端。
+  const pollDescriptor = new Int32Array([process.stdin.fd, 1]);
 
   return {
     close() {
-      closeSync(fileDescriptor);
+      library.close();
     },
     readByte() {
-      try {
-        const bytesRead = readSync(fileDescriptor, inputByteBuffer);
-
-        return bytesRead === 0 ? undefined : inputByteBuffer[0];
-      } catch (error: unknown) {
-        const errorCode =
-          typeof error === 'object' && error !== null && 'code' in error
-            ? error.code
-            : undefined;
-
-        if (errorCode === 'EAGAIN' || errorCode === 'EWOULDBLOCK') {
-          return undefined;
-        }
-        throw error;
+      if (preservedStdinByte !== undefined) {
+        return readStdinByteOrEof();
       }
+      // 超时为零，只探测实际 stdin，既不依赖控制终端，也不修改共享 fd 的阻塞模式。
+      const ready = library.symbols.poll(pollDescriptor, 1, 0);
+
+      if (ready < 0) {
+        throw new Error('Cannot poll stdin for queued input.');
+      }
+
+      if (ready === 0) {
+        return undefined;
+      }
+      const inputByte = readStdinByteOrEof();
+
+      return inputByte === -1 ? undefined : inputByte;
     },
   };
 }
