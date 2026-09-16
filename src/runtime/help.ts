@@ -36,7 +36,7 @@ const HELP_STYLE_CODES: Record<HelpStyle, string> = {
 // Bun 的命令列表和顶层选项使用固定列，子命令选项按最长名称动态计算列宽。
 const COMMAND_SYNOPSIS_COLUMN = 12;
 const COMMAND_DESCRIPTION_COLUMN = 33;
-const TOP_LEVEL_FLAG_COLUMN_WIDTH = 30;
+const TOP_LEVEL_FLAG_COLUMN_WIDTH = 38;
 const STYLE_MARKER = '\0';
 const GLOBAL_FLAG_ROWS: readonly FlagHelpRow[] = [
   {
@@ -227,23 +227,24 @@ function renderFlagName(row: FlagHelpRow): string {
   return `${shortFlag}${longFlag}${valueHint}`;
 }
 
-function getFlagColumnWidth(row: FlagHelpRow): number {
-  return visibleTextWidth(row.long) + (row.takesValue ? 6 : 0);
-}
-
 function renderFlagRows(
   rows: readonly FlagHelpRow[],
   topLevel = false,
 ): string[] {
+  const flagNames = rows.map(renderFlagName);
+  // 隐式短选项也可能是全角字符，因此整段名称都必须参与显示列宽计算。
   const flagColumnWidth = topLevel
     ? TOP_LEVEL_FLAG_COLUMN_WIDTH
-    : Math.max(2, ...rows.map(getFlagColumnWidth));
+    : Math.max(...flagNames.map(visibleTextWidth));
 
-  return rows.map(row => {
-    const spacesAfter = ' '.repeat(flagColumnWidth - getFlagColumnWidth(row));
+  return rows.map((row, index) => {
+    const flagName = flagNames[index]!;
+    const spacesAfter = ' '.repeat(
+      flagColumnWidth - visibleTextWidth(flagName),
+    );
     const descriptionSpacing = topLevel ? spacesAfter : `  ${spacesAfter}  `;
 
-    return `${renderFlagName(row)}${descriptionSpacing}${row.description}`;
+    return `${flagName}${descriptionSpacing}${row.description}`;
   });
 }
 
