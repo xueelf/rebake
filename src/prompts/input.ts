@@ -14,6 +14,11 @@ const textEncoder = new TextEncoder();
 const INPUT_BUFFER_SIZE = 1024;
 const INVALID_INPUT_MESSAGE = 'Invalid input.';
 const INPUT_INTERRUPTED = Symbol('input interrupted');
+// eslint-disable-next-line no-control-regex -- ANSI 字节必须整体分段，不能在折行时拆开颜色序列。
+const INPUT_TEXT_PARTS = /\x1b\[[0-?]*[ -/]*[@-~]|[^\x1b]+|\x1b/gu;
+const inputSegments = new Intl.Segmenter(undefined, {
+  granularity: 'grapheme',
+});
 
 export interface InputOptions {
   default?: string;
@@ -74,36 +79,73 @@ function getValidationError(
   return result;
 }
 
-function renderCorrectedInput(value: string): void {
-  writeStdout(ANSI.CURSOR_RESTORE, ANSI.ERASE_DOWN, value);
-}
+function wrapInputText(text: string, columns: number): string[] {
+  const lines: string[] = [];
+  let line = '';
+  let width = 0;
+  let style = '';
 
-function renderValidationError(value: string, errorMessage: string): void {
-  writeStdout(
-    ANSI.CURSOR_RESTORE,
-    ANSI.ERASE_DOWN,
-    value,
-    '\n',
-    styleCliText('red', `> ${errorMessage}`),
-    ANSI.CURSOR_RESTORE,
-    value,
-  );
-}
+  for (const part of text.match(INPUT_TEXT_PARTS) ?? []) {
+    if (part.startsWith('\x1b')) {
+      line += part;
 
-function completeCorrectedInput(value: string): void {
-  writeStdout(ANSI.CURSOR_RESTORE, ANSI.ERASE_DOWN, value, '\n');
+      if (part.endsWith('m')) {
+        style = part === ANSI.RESET || part === '\x1b[m' ? '' : style + part;
+      }
+      continue;
+    }
+
+    for (const { segment } of inputSegments.segment(part)) {
+      if (segment === '\n' || segment === '\r\n') {
+        lines.push(line);
+        line = style;
+        width = 0;
+        continue;
+      }
+
+      if (segment === '\r') {
+        line += segment;
+        width = 0;
+        continue;
+      }
+      const characters =
+        segment === '\t' ? Array<string>(8 - (width % 8)).fill(' ') : [segment];
+
+      for (const character of characters) {
+        const characterWidth = Bun.stringWidth(character);
+
+        if (width + characterWidth > columns && width > 0) {
+          lines.push(line);
+          line = style;
+          width = 0;
+        }
+        line += character;
+        width += characterWidth;
+      }
+    }
+  }
+  lines.push(line);
+  return lines;
 }
 
 function readCorrectedInput(
-  initialValue: string,
+  prompt: string,
+  initialInput: string,
   initialErrorMessage: string,
   defaultValue: string | undefined,
   validate: NonNullable<InputOptions['validate']>,
 ): string | null | typeof INPUT_INTERRUPTED {
-  let value = initialValue;
+  let value = initialInput === '' ? (defaultValue ?? '') : initialInput;
   let valueByteLength = textEncoder.encode(value).length;
   let errorVisible = true;
   let pendingInputByte: number | undefined;
+  const columns = Math.max(1, process.stdout.columns || 80);
+  const rows = Math.max(1, process.stdout.rows || 24);
+  let cursorRow = Math.min(
+    wrapInputText(prompt + initialInput, columns).length,
+    rows - 1,
+  );
+  let renderedInput: string | undefined;
   const nonBlockingStdinReader = openNonBlockingStdinReader();
   const readInputByte = () => {
     if (pendingInputByte !== undefined) {
@@ -114,20 +156,64 @@ function readCorrectedInput(
     }
     return readStdinByteOrEof();
   };
+  const renderInput = (errorMessage?: string) => {
+    const errorLines =
+      errorMessage === undefined
+        ? []
+        : wrapInputText(`> ${errorMessage}`, columns).slice(0, rows - 1);
+    const inputLines = wrapInputText(prompt + value, columns).slice(
+      -(rows - errorLines.length),
+    );
+    const inputText = inputLines.join('\n');
+
+    if (
+      !errorVisible &&
+      errorMessage === undefined &&
+      renderedInput !== undefined &&
+      inputText.startsWith(renderedInput)
+    ) {
+      writeStdout(inputText.slice(renderedInput.length));
+    } else {
+      // 保存的屏幕坐标不会跟随滚屏；始终从当前输入行相对定位可见交互块。
+      writeStdout(
+        '\r',
+        cursorRow > 0 ? ANSI.CURSOR_UP(cursorRow) : '',
+        ANSI.ERASE_DOWN,
+        inputText,
+      );
+
+      if (errorLines.length > 0) {
+        writeStdout(
+          '\n',
+          styleCliText('red', errorLines.join('\n')),
+          '\r',
+          ANSI.CURSOR_UP(errorLines.length),
+          inputLines.at(-1)!,
+        );
+      }
+    }
+    cursorRow = inputLines.length - 1;
+    renderedInput = inputText;
+    errorVisible = errorMessage !== undefined;
+  };
+  const completeInput = () => {
+    renderInput();
+    writeStdout('\n');
+  };
 
   try {
-    renderValidationError(value, initialErrorMessage);
+    renderInput(initialErrorMessage);
 
     while (true) {
       const inputByte = readInputByte();
 
       if (inputByte === -1 || inputByte === 4) {
-        renderCorrectedInput(value);
+        renderInput();
         return null;
       }
 
       if (inputByte === 3) {
-        completeCorrectedInput(value);
+        completeInput();
         return INPUT_INTERRUPTED;
       }
 
@@ -147,11 +233,10 @@ function readCorrectedInput(
         }
 
         if (errorMessage === undefined) {
-          completeCorrectedInput(value);
+          completeInput();
           return submittedValue;
         }
-        renderValidationError(value, errorMessage);
-        errorVisible = true;
+        renderInput(errorMessage);
         continue;
       }
 
@@ -168,13 +253,12 @@ function readCorrectedInput(
         pendingInputByte = followingInputByte;
         value = removeLastCharacters(value, characterCount);
         valueByteLength = textEncoder.encode(value).length;
-        errorVisible = false;
-        renderCorrectedInput(value);
+        renderInput();
         continue;
       }
 
       if (inputByte === 27) {
-        completeCorrectedInput(value);
+        completeInput();
         return null;
       }
 
@@ -184,7 +268,7 @@ function readCorrectedInput(
       const character = readInputCharacter(inputByte, readInputByte);
 
       if (character === null) {
-        renderCorrectedInput(value);
+        renderInput();
         return null;
       }
       const [text, byteLength] = character;
@@ -193,16 +277,12 @@ function readCorrectedInput(
         throw new RangeError('Input cannot exceed 1023 bytes.');
       }
 
-      if (errorVisible) {
-        renderCorrectedInput(value);
-        errorVisible = false;
-      }
       value += text;
       valueByteLength += byteLength;
-      writeStdout(text);
+      renderInput();
     }
   } catch (error: unknown) {
-    completeCorrectedInput(value);
+    completeInput();
     throw error;
   } finally {
     nonBlockingStdinReader?.close();
@@ -235,22 +315,18 @@ function readInputLine(): string | null {
   return textDecoder.decode(Uint8Array.from(inputBytes));
 }
 
-function writeInputPrompt(
+function formatInputPrompt(
   message: string,
   defaultValue: string | undefined,
-): void {
+): string {
   if (message.length > 0) {
     const hasVisibleDefault =
       defaultValue !== undefined && defaultValue.length > 0;
     const suffix = hasVisibleDefault ? `(${defaultValue}):` : ':';
 
-    writeStdout(
-      styleCliText('cyan', message),
-      hasVisibleDefault ? SPACE : '',
-      styleCliText('dim', suffix),
-    );
+    return `${styleCliText('cyan', message)}${hasVisibleDefault ? SPACE : ''}${styleCliText('dim', suffix)}${SPACE}`;
   }
-  writeStdout(SPACE);
+  return SPACE;
 }
 
 export function input(
@@ -284,10 +360,13 @@ export function input(
     process.stdin.isTTY === true &&
     process.stdout.isTTY === true;
 
-  writeInputPrompt(message, defaultValue);
+  const prompt = formatInputPrompt(message, defaultValue);
+
+  // 校验重绘需要已知的起始列，独立行也避免清理时覆盖调用方尚未换行的输出。
+  writeStdout(canCorrectInput ? '\n' : '', prompt);
 
   if (canCorrectInput) {
-    writeStdout(ANSI.CURSOR_SAVE);
+    writeStdout(ANSI.CLEAR_TO_END);
   }
   const restoreInitialInputMode = enterInputMode();
   let result: string | null;
@@ -325,7 +404,8 @@ export function input(
   try {
     // Bun 1.4 尚无文本校验交互；这里暂按主流 CLI 原位显示错误，未来需重新对照 Bun。
     const correctedValue = readCorrectedInput(
-      value,
+      prompt,
+      result,
       errorMessage,
       defaultValue,
       validate,

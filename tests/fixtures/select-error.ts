@@ -7,7 +7,6 @@ const originalWrite = process.stdout.write;
 const writes: string[] = [];
 const rawModes: boolean[] = [];
 
-process.env['FORCE_COLOR'] = '1';
 Object.defineProperty(process.stdin, 'isTTY', {
   configurable: true,
   value: true,

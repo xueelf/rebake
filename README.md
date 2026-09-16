@@ -494,7 +494,7 @@ console.log(`Hello, ${answer}!`);
 
 Input accepts up to 1023 bytes of text. Longer input throws a `RangeError` instead of being truncated.
 
-`validate` runs synchronously when the user submits. Return `true` to accept the value, `false` to show a generic error, or a string to show that error below the active input. Invalid text remains editable and the prompt is redrawn in place without adding duplicate lines. If the streams are not interactive, a validation failure throws an `Error` because the value cannot be corrected in place.
+`validate` runs synchronously when the user submits. Return `true` to accept the value, `false` to show a generic error, or a string to show that error below the active input. When both input and output are interactive terminals, validated input starts on a new line. Invalid text remains editable and the prompt is redrawn in place without adding duplicate lines. If the text exceeds the terminal height during correction, only its editable tail is shown. The returned value remains complete. If the streams are not interactive, a validation failure throws an `Error` because the value cannot be corrected in place.
 
 ### Single Choice List: `select(message, choices)`
 
